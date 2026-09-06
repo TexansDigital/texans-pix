@@ -3,6 +3,7 @@ import { TEMPLATES, getTemplate } from './templates.js';
 import {
   loadFonts, decodeImage, coverRect, coverSlack, makeSampler, clamp, drawGuides, ImageError,
 } from './compose.js';
+import { saveItem, listItems, removeItem, thumbFor, storageKind } from './collection.js';
 
 const $ = sel => document.querySelector(sel);
 
@@ -12,6 +13,7 @@ const state = {
   template: TEMPLATES[0],
   image: null,
   imageLabel: '',
+  photoLibraryId: null,
   sourceWidth: 0,
   sourceHeight: 0,
   zoom: 1,
@@ -22,6 +24,7 @@ const state = {
 };
 
 const marks = {};
+const LIBRARY_INDEX = new Map();
 const canvas = $('#stage');
 const ctx = canvas.getContext('2d', { alpha: false, willReadFrequently: true });
 
@@ -83,7 +86,7 @@ function placeholder(W, H) {
 // generation guard a fan's second pick loses to their first.
 let loadGeneration = 0;
 
-async function useSource(source, label) {
+async function useSource(source, label, libraryId = null) {
   const generation = ++loadGeneration;
   setStatus(`Decoding ${label}…`);
   try {
@@ -93,6 +96,7 @@ async function useSource(source, label) {
     state.image?.close?.();
     state.image = bitmap;
     state.imageLabel = label;
+    state.photoLibraryId = libraryId;
     state.sourceWidth = sourceWidth;
     state.sourceHeight = sourceHeight;
     state.zoom = 1;
@@ -122,7 +126,7 @@ async function useLibraryPhoto(entry) {
   try {
     const res = await fetch(entry.file);
     if (!res.ok) throw new ImageError(`Could not load ${entry.file} (${res.status}).`);
-    await useSource(await res.blob(), entry.title || entry.id);
+    await useSource(await res.blob(), entry.title || entry.id, entry.id);
   } catch (err) {
     setStatus(err instanceof ImageError ? err.message : 'Could not load that photo.', true);
   }
@@ -206,6 +210,7 @@ async function buildLibrary() {
         btn.classList.add('on');
         useLibraryPhoto(entry);
       });
+      LIBRARY_INDEX.set(entry.id, entry);
       grid.appendChild(btn);
     }
   } catch {
@@ -314,6 +319,113 @@ async function exportWallpaper() {
   if (state.guides) scheduleRender();
 }
 
+// --- collection ------------------------------------------------------------
+
+function currentRecipe() {
+  return {
+    template: state.template.id,
+    device: state.device.id,
+    surface: effectiveSurface(),
+    fields: { ...state.fields },
+    zoom: state.zoom, panX: state.panX, panY: state.panY,
+    // Only a library id is portable. A fan's own photo stays on their device,
+    // so the recipe records that it was theirs and nothing more.
+    photo: state.photoLibraryId ? { kind: 'library', id: state.photoLibraryId } : { kind: 'own' },
+    label: state.imageLabel,
+  };
+}
+
+function previewThumb() {
+  try {
+    const t = document.createElement('canvas');
+    t.width = 150;
+    t.height = Math.round(150 * canvas.height / canvas.width);
+    t.getContext('2d').drawImage(canvas, 0, 0, t.width, t.height);
+    return t.toDataURL('image/jpeg', 0.7);
+  } catch {
+    return null;
+  }
+}
+
+async function keepCurrent() {
+  if (!state.image) { setStatus('Make something first.', true); return; }
+  render(false);
+  const { where } = await saveItem(currentRecipe(), previewThumb());
+  setStatus(where === 'account' ? 'Kept in your collection.' : 'Kept on this device.');
+  if (state.guides) scheduleRender();
+  await renderCollection();
+}
+
+async function restore(item) {
+  state.template = getTemplate(item.template);
+  state.device = getDevice(item.device);
+  state.surface = item.surface;
+  Object.assign(state.fields, item.fields || {});
+
+  $('#device').value = state.device.id;
+  $('#dims').textContent = `${state.device.w} x ${state.device.h}`;
+  const radio = document.querySelector(`[name="surface"][value="${state.surface}"]`);
+  if (radio) radio.checked = true;
+  syncSurfaceControls();
+  document.querySelectorAll('.tpl').forEach(b =>
+    b.setAttribute('aria-pressed', String(b.dataset.id === state.template.id)));
+  for (const [key, value] of Object.entries(state.fields)) {
+    const input = document.querySelector(`[data-field="${key}"]`);
+    if (input) input.value = value;
+  }
+
+  if (item.photo?.kind === 'library') {
+    const entry = LIBRARY_INDEX.get(item.photo.id);
+    if (entry) { await useLibraryPhoto(entry); }
+    else setStatus('That photo is no longer in this week\'s library.', true);
+  } else {
+    setStatus('Pick your photo again — your own photos stay on your device.');
+  }
+  state.zoom = item.zoom ?? 1;
+  state.panX = item.panX ?? 0;
+  state.panY = item.panY ?? 0;
+  $('#zoom').value = String(state.zoom);
+  scheduleRender();
+}
+
+async function renderCollection() {
+  const grid = $('#collection');
+  const items = await listItems();
+  grid.innerHTML = '';
+  for (const item of items) {
+    const cell = document.createElement('div');
+    cell.className = 'keep';
+    const open = document.createElement('button');
+    open.type = 'button';
+    open.style.cssText = 'all:unset;display:block;width:100%;height:100%;cursor:pointer';
+    open.title = `Open ${item.label || item.template}`;
+    const thumb = thumbFor(item.id);
+    if (thumb) {
+      const img = document.createElement('img');
+      img.src = thumb;
+      img.alt = item.label || item.template;
+      open.appendChild(img);
+    }
+    const meta = document.createElement('span');
+    meta.className = 'meta';
+    meta.textContent = item.template;
+    open.appendChild(meta);
+    open.addEventListener('click', () => restore(item));
+    const drop = document.createElement('button');
+    drop.type = 'button';
+    drop.className = 'drop';
+    drop.textContent = '\u00d7';
+    drop.title = 'Remove';
+    drop.addEventListener('click', async e => {
+      e.stopPropagation();
+      await removeItem(item.id);
+      await renderCollection();
+    });
+    cell.append(open, drop);
+    grid.appendChild(cell);
+  }
+}
+
 async function loadMarks() {
   const load = src => new Promise(resolve => {
     const img = new Image();
@@ -355,6 +467,7 @@ async function init() {
     scheduleRender();
   });
   $('#export').addEventListener('click', exportWallpaper);
+  $('#keep').addEventListener('click', keepCurrent);
   $('#export').disabled = true;
   $('#dims').textContent = `${state.device.w} x ${state.device.h}`;
 
@@ -367,6 +480,12 @@ async function init() {
   if (warnings.length) setStatus(`Type will fall back — ${warnings.join(', ')}.`, true);
   else setStatus('Pick a photo to start');
   buildLibrary();
+  storageKind().then(kind => {
+    $('#coll-where').textContent = kind === 'account'
+      ? 'Kept to your account, so they follow you between devices.'
+      : 'Kept on this device. Sign in later and they follow you everywhere.';
+  });
+  renderCollection();
 }
 
 init();
@@ -381,4 +500,5 @@ window.__studio = {
   setTemplate: id => { state.template = getTemplate(id); scheduleRender(); },
   setSurface: s => { state.surface = s; scheduleRender(); },
   setFields: patch => { Object.assign(state.fields, patch); scheduleRender(); },
+  keepCurrent, renderCollection,
 };
