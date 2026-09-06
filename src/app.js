@@ -1,7 +1,7 @@
 import { DEVICES, DEVICE_GROUPS, getDevice } from './devices.js';
 import { TEMPLATES, getTemplate } from './templates.js';
 import {
-  loadFonts, decodeImage, coverRect, coverSlack, clamp, drawGuides, ImageError,
+  loadFonts, decodeImage, coverRect, coverSlack, makeSampler, clamp, drawGuides, ImageError,
 } from './compose.js';
 
 const $ = sel => document.querySelector(sel);
@@ -49,14 +49,19 @@ function render(withGuides) {
   ctx.fillStyle = '#021118';
   ctx.fillRect(0, 0, W, H);
 
+  let rect = null;
   if (state.image) {
-    const r = coverRect(state.image, W, H, state.zoom, state.panX, state.panY);
-    ctx.drawImage(state.image, r.x, r.y, r.w, r.h);
+    rect = coverRect(state.image, W, H, state.zoom, state.panX, state.panY);
+    ctx.drawImage(state.image, rect.x, rect.y, rect.w, rect.h);
   } else {
     placeholder(W, H);
   }
 
-  state.template.draw(ctx, { W, H, device: state.device, surface, fields: state.fields, marks });
+  // Scrims size themselves to the photo. Sampling a 64px proxy of the same
+  // geometry keeps that off the full-size canvas, which cost ~15ms a frame.
+  const sample = makeSampler(state.image, W, H, rect);
+
+  state.template.draw(ctx, { W, H, device: state.device, surface, fields: state.fields, marks, sample });
 
   if (withGuides) drawGuides(ctx, W, H, state.device, surface);
 }
@@ -316,7 +321,10 @@ async function loadMarks() {
     img.onerror = () => resolve(null);
     img.src = src;
   });
+  // Two variants: the badge sits outside the scrim, so it picks whichever
+  // reads against the photo behind it rather than vanishing into a bright frame.
   marks.bullhead = await load('assets/logos/bullhead-on-dark.png');
+  marks.bullheadRed = await load('assets/logos/bullhead-red.png');
   marks.wordmark = await load('assets/logos/wordmark-red-white.png');
 }
 

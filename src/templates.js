@@ -6,10 +6,15 @@
 //   - type over photography gets a scrim, never a rounded translucent box
 //   - square corners; red is emphasis, never a large field except the ticker
 //   - no sponsor mark is ever baked into the file (see README)
+//
+// Every template measures its type first, then lays a scrim sized to where
+// that type actually landed, then draws. A scrim anchored to a fixed fraction
+// of height inverts on a landscape plate — display size scales with width —
+// and leaves the headline sitting above its own protection.
 
 import {
-  BRAND, WEIGHTS, TONE, protectBand, scrimTop, scrimFlat, rule,
-  monoStamp, layoutDisplay, drawDisplay, tickerStrip, drawBadge,
+  BRAND, WEIGHTS, TONE, protectBand, scrimTop, scrimFlat, rule, isLightBackdrop,
+  monoStamp, layoutDisplay, drawDisplay, fitLine, tickerStrip, drawBadge,
 } from './compose.js';
 
 // A field counts as present only if it has non-whitespace in it. A single
@@ -18,7 +23,7 @@ const has = v => typeof v === 'string' ? v.trim().length > 0 : v != null && Stri
 const val = v => String(v ?? '').trim();
 
 // First non-blank value, so `headline: ' '` falls through to the next option.
-export const pick = (...vals) => vals.find(has) !== undefined ? val(vals.find(has)) : '';
+export const pick = (...vals) => { const hit = vals.find(has); return hit === undefined ? '' : val(hit); };
 
 // `SEC 132` only when there is a section. Prevents the bare label that a
 // whitespace-only field used to leave behind.
@@ -29,6 +34,13 @@ const labeled = (label, v) => (has(v) ? `${label} ${val(v)}` : '');
 export const join = (...parts) => parts.filter(has).map(val).join(' // ');
 
 const MARGIN = 0.062; // side margin as a fraction of width
+
+// The corner badge sits outside the scrim, so a white bullhead disappears on a
+// bright frame. Pick the variant that actually reads against what is behind it.
+function badgeMark(marks, sample, H, top, size) {
+  const light = sample ? isLightBackdrop(sample(top / H, (top + size) / H)) : false;
+  return (light && marks.bullheadRed) ? marks.bullheadRed : marks.bullhead;
+}
 
 function frame(W, H, device, surface) {
   const m = Math.round(W * MARGIN);
@@ -45,31 +57,45 @@ function frame(W, H, device, surface) {
   return { m, left: m, right: W - m, width: W - m * 2, top, bottom };
 }
 
+// Where the brand ticker strip may sit. On a lock screen the physical bottom
+// edge is under the flashlight and camera controls; on a home screen it is
+// under the dock. Only a surface with neither gets the true bottom edge.
+function tickerTop(H, f, device, surface, stripH) {
+  const lock = surface === 'lock' && device.lock;
+  const hasDock = (device.home?.dockTop ?? 1) < 1;
+  return lock || hasDock ? Math.round(f.bottom) : H - stripH;
+}
+
 export const TEMPLATES = [
   {
     id: 'battle',
     label: 'Battle',
     note: 'Bottom scrim, heavy display line, red rule. The default.',
-    draw(ctx, { W, H, device, surface, fields, marks }) {
+    draw(ctx, { W, H, device, surface, fields, marks, sample }) {
       const f = frame(W, H, device, surface);
-      protectBand(ctx, W, H, { fromFrac: 0.42, tone: TONE.white, floor: 0.5 });
-
       const stampSize = Math.max(16, W * 0.026);
       const kicker = join(fields.kicker, labeled('SEC', fields.section));
+      const ruleH = Math.max(4, Math.round(H * 0.0055));
+
+      // Measure.
       let y = f.bottom;
-
-      if (has(kicker)) {
-        monoStamp(ctx, kicker, f.left, y, stampSize, 'rgba(255,255,255,.78)', 'left', f.width);
-        y -= stampSize * 2.4;
-      }
-      const headline = pick(fields.headline, fields.name, 'HOUSTON TEXANS');
-      const layout = layoutDisplay(ctx, headline, { size: Math.round(W * 0.135), maxWidth: f.width, maxLines: 3 });
+      const kickerY = has(kicker) ? y : null;
+      if (kickerY !== null) y -= stampSize * 2.4;
+      const budget = y - f.top - ruleH - H * 0.03;
+      const layout = layoutDisplay(ctx, pick(fields.headline, fields.name, 'HOUSTON TEXANS'), {
+        size: Math.round(W * 0.135), maxWidth: f.width, maxHeight: budget, maxLines: 3,
+      });
       y -= layout.height;
-      drawDisplay(ctx, layout, { x: f.left, y, color: BRAND.white });
-      y -= Math.round(H * 0.022);
-      rule(ctx, f.left, y, Math.round(W * 0.16), Math.max(4, Math.round(H * 0.0055)));
+      const headlineY = y;
+      const ruleY = y - Math.round(H * 0.022);
 
-      if (marks.bullhead) drawBadge(ctx, marks.bullhead, f.left, f.top, W * 0.13);
+      // Protect, then draw.
+      protectBand(ctx, W, H, { fromFrac: (ruleY - H * 0.02) / H, tone: TONE.white, floor: 0.45, sample });
+      if (kickerY !== null) monoStamp(ctx, kicker, f.left, kickerY, stampSize, 'rgba(255,255,255,.82)', 'left', f.width);
+      drawDisplay(ctx, layout, { x: f.left, y: headlineY, color: BRAND.white });
+      rule(ctx, f.left, ruleY, Math.round(W * 0.16), ruleH);
+      const badgeSize = W * 0.13;
+      drawBadge(ctx, badgeMark(marks, sample, H, f.top, badgeSize), f.left, f.top, badgeSize);
     },
   },
 
@@ -77,10 +103,8 @@ export const TEMPLATES = [
     id: 'stamp',
     label: 'Stamp',
     note: 'Mono data block only. Keeps the frame clear — best for lock screens.',
-    draw(ctx, { W, H, device, surface, fields }) {
+    draw(ctx, { W, H, device, surface, fields, sample }) {
       const f = frame(W, H, device, surface);
-      protectBand(ctx, W, H, { fromFrac: 0.64, tone: TONE.white, floor: 0.45 });
-
       const size = Math.max(18, W * 0.030);
       const lines = [
         join(fields.kicker),
@@ -88,14 +112,18 @@ export const TEMPLATES = [
         join(labeled('SECTION', fields.section), labeled('SINCE', fields.since)),
       ].filter(has);
 
+      const blockTop = f.bottom - Math.max(0, lines.length - 1) * size * 2.1 - size;
+      const ruleY = blockTop - size * 0.9;
+      protectBand(ctx, W, H, { fromFrac: (ruleY - H * 0.02) / H, tone: TONE.white, floor: 0.45, sample });
+
       let y = f.bottom;
       for (let i = lines.length - 1; i >= 0; i--) {
-        const color = i === 0 ? BRAND.battleRed : 'rgba(255,255,255,.92)';
-        monoStamp(ctx, lines[i], f.left, y, size, color, 'left', f.width);
+        // Small red mono cannot reach 4.5:1 over arbitrary photography without
+        // a near-opaque scrim, so the emphasis lives in the rule instead.
+        monoStamp(ctx, lines[i], f.left, y, size, 'rgba(255,255,255,.94)', 'left', f.width);
         y -= size * 2.1;
       }
-      y -= size * 0.4;
-      rule(ctx, f.left, y, Math.round(W * 0.10), Math.max(3, Math.round(H * 0.004)));
+      rule(ctx, f.left, ruleY, Math.round(W * 0.10), Math.max(3, Math.round(H * 0.004)));
     },
   },
 
@@ -103,33 +131,35 @@ export const TEMPLATES = [
     id: 'deep-steel',
     label: 'Deep Steel',
     note: 'Flat scrim with the bullhead held back behind the type.',
-    draw(ctx, { W, H, device, surface, fields, marks }) {
+    draw(ctx, { W, H, device, surface, fields, marks, sample }) {
       const f = frame(W, H, device, surface);
-      // Red hot needs a near-black backdrop before it reads at all.
-      scrimFlat(ctx, W, H, { tone: TONE.red, floor: 0.5 });
 
+      // The watermark goes under the scrim, not over it. Drawn on top it lifted
+      // the backdrop out from under the red type and cost a full point of contrast.
       if (marks.bullhead) {
         ctx.save();
-        ctx.globalAlpha = 0.14;
-        const size = W * 0.86;
+        ctx.globalAlpha = 0.2;
+        const size = Math.min(W * 0.86, (f.bottom - f.top) * 0.8);
         drawBadge(ctx, marks.bullhead, (W - size) / 2, f.top + (f.bottom - f.top) * 0.08, size);
         ctx.restore();
       }
+      scrimFlat(ctx, W, H, { tone: TONE.red, floor: 0.5, sample });
 
       const stampSize = Math.max(16, W * 0.026);
       let y = f.bottom;
       const foot = join(labeled('SECTION', fields.section), labeled('SINCE', fields.since));
       if (has(foot)) {
-        monoStamp(ctx, foot, W / 2, y, stampSize, 'rgba(255,255,255,.8)', 'center', f.width);
+        monoStamp(ctx, foot, W / 2, y, stampSize, 'rgba(255,255,255,.85)', 'center', f.width);
         y -= stampSize * 2.6;
       }
-      const headline = pick(fields.headline, fields.name, 'WE FINISH WHAT WE START');
-      const layout = layoutDisplay(ctx, headline, { size: Math.round(W * 0.115), maxWidth: f.width, maxLines: 3 });
+      const budget = y - f.top - (has(fields.kicker) ? stampSize * 2.2 : 0);
+      const layout = layoutDisplay(ctx, pick(fields.headline, fields.name, 'WE FINISH WHAT WE START'), {
+        size: Math.round(W * 0.115), maxWidth: f.width, maxHeight: budget, maxLines: 3,
+      });
       y -= layout.height;
       drawDisplay(ctx, layout, { x: W / 2, y, color: BRAND.redHot, align: 'center' });
       if (has(fields.kicker)) {
-        y -= stampSize * 2.2;
-        monoStamp(ctx, fields.kicker, W / 2, y, stampSize, 'rgba(255,255,255,.85)', 'center', f.width);
+        monoStamp(ctx, fields.kicker, W / 2, y - stampSize * 1.4, stampSize, 'rgba(255,255,255,.88)', 'center', f.width);
       }
     },
   },
@@ -138,26 +168,28 @@ export const TEMPLATES = [
     id: 'ticker',
     label: 'Ticker',
     note: 'The brand ticker strip along the bottom of the safe area.',
-    draw(ctx, { W, H, device, surface, fields }) {
+    draw(ctx, { W, H, device, surface, fields, sample }) {
       const f = frame(W, H, device, surface);
       const stripH = Math.round(H * 0.028);
-      // On a lock screen the true bottom edge sits under the flashlight and
-      // camera controls, so the strip rides the bottom of the safe band.
-      const stripTop = surface === 'lock' && device.lock ? Math.round(f.bottom) : H - stripH;
-
-      protectBand(ctx, W, H, { fromFrac: 0.5, toFrac: (stripTop + stripH) / H, tone: TONE.white, floor: 0.5 });
-      tickerStrip(ctx, W, stripTop, stripH);
-
+      const stripTop = tickerTop(H, f, device, surface, stripH);
       const stampSize = Math.max(16, W * 0.026);
-      let y = stripTop - stripH * 0.6;
       const kicker = join(fields.kicker, labeled('SEC', fields.section), labeled('SINCE', fields.since));
-      if (has(kicker)) {
-        monoStamp(ctx, kicker, f.left, y, stampSize, 'rgba(255,255,255,.8)', 'left', f.width);
-        y -= stampSize * 2.4;
-      }
-      const headline = pick(fields.headline, fields.name, 'HOUSTON');
-      const layout = layoutDisplay(ctx, headline, { size: Math.round(W * 0.155), maxWidth: f.width, maxLines: 2 });
+
+      let y = stripTop - stripH * 0.6;
+      if (has(kicker)) y -= stampSize * 2.4;
+      const kickerY = has(kicker) ? stripTop - stripH * 0.6 : null;
+      const budget = y - f.top;
+      const layout = layoutDisplay(ctx, pick(fields.headline, fields.name, 'HOUSTON'), {
+        size: Math.round(W * 0.155), maxWidth: f.width, maxHeight: budget, maxLines: 2,
+      });
       y -= layout.height;
+
+      protectBand(ctx, W, H, {
+        fromFrac: (y - H * 0.02) / H, toFrac: (stripTop + stripH) / H,
+        tone: TONE.white, floor: 0.45, sample,
+      });
+      tickerStrip(ctx, W, stripTop, stripH);
+      if (kickerY !== null) monoStamp(ctx, kicker, f.left, kickerY, stampSize, 'rgba(255,255,255,.85)', 'left', f.width);
       drawDisplay(ctx, layout, { x: f.left, y, color: BRAND.white });
     },
   },
@@ -166,41 +198,56 @@ export const TEMPLATES = [
     id: 'jersey',
     label: 'Jersey',
     note: 'Your number as the hero. Needs a number to earn its keep.',
-    draw(ctx, { W, H, device, surface, fields, marks }) {
+    draw(ctx, { W, H, device, surface, fields, marks, sample }) {
       const f = frame(W, H, device, surface);
       const number = val(fields.number).toUpperCase().slice(0, 2);
-      // The number is red hot and huge; the band under it has to go near-black.
-      protectBand(ctx, W, H, { fromFrac: 0.34, tone: has(number) ? TONE.red : TONE.white, floor: 0.5 });
-      scrimTop(ctx, W, H, 0.28, 0.5);
+      const stampSize = Math.max(16, W * 0.026);
+      const foot = join(fields.kicker, labeled('SEC', fields.section));
 
       let y = f.bottom;
+      const footY = has(foot) ? y : null;
+      if (footY !== null) y -= stampSize * 2.6;
 
-      const foot = join(fields.kicker, labeled('SEC', fields.section));
-      const stampSize = Math.max(16, W * 0.026);
-      if (has(foot)) {
-        monoStamp(ctx, foot, f.left, y, stampSize, 'rgba(255,255,255,.78)', 'left', f.width);
-        y -= stampSize * 2.6;
+      const nameLayout = layoutDisplay(ctx, pick(fields.name, fields.headline, 'HOUSTON TEXANS'), {
+        size: Math.round(W * 0.088), maxWidth: f.width, maxHeight: (y - f.top) * 0.4, maxLines: 2,
+      });
+      y -= nameLayout.height;
+      const nameY = y;
+
+      let numSize = 0;
+      let numY = y;
+      if (has(number)) {
+        // Fitted on both axes: `WW` used to run off every preset, and on a
+        // landscape plate a width-derived size overflowed the canvas top.
+        numSize = fitLine(ctx, number, {
+          size: Math.round(W * 0.42), maxWidth: f.width, maxHeight: (y - f.top) * 0.92,
+        });
+        numY = y - Math.round(numSize * 0.16);
+        y = numY - numSize * 0.86;
+      } else {
+        y -= Math.round(H * 0.02);
       }
 
-      const name = pick(fields.name, fields.headline, 'HOUSTON TEXANS');
-      const layout = layoutDisplay(ctx, name, { size: Math.round(W * 0.088), maxWidth: f.width, maxLines: 2 });
-      y -= layout.height;
-      drawDisplay(ctx, layout, { x: f.left, y, color: BRAND.white });
+      const topInk = Math.max(f.top * 0.5, y - H * 0.02);
+      protectBand(ctx, W, H, {
+        fromFrac: topInk / H, tone: has(number) ? TONE.red : TONE.white, floor: 0.45, sample,
+      });
+      scrimTop(ctx, W, H, 0.28, 0.5);
+
+      if (footY !== null) monoStamp(ctx, foot, f.left, footY, stampSize, 'rgba(255,255,255,.82)', 'left', f.width);
+      drawDisplay(ctx, nameLayout, { x: f.left, y: nameY, color: BRAND.white });
 
       if (has(number)) {
-        const numSize = Math.round(W * 0.42);
         ctx.save();
         ctx.font = `${WEIGHTS.black} ${numSize}px ${BRAND.display}`;
         ctx.textBaseline = 'alphabetic';
         ctx.fillStyle = BRAND.redHot;
-        y -= Math.round(numSize * 0.16);
-        ctx.fillText(number, f.left, y);
+        ctx.fillText(number, f.left, numY);
         ctx.restore();
-        y -= numSize * 0.86;
       } else {
-        y -= Math.round(H * 0.02);
         rule(ctx, f.left, y, Math.round(W * 0.16), Math.max(4, Math.round(H * 0.0055)));
-        if (marks.bullhead) drawBadge(ctx, marks.bullhead, f.left, f.top, W * 0.12);
+        const badgeSize = W * 0.12;
+        drawBadge(ctx, badgeMark(marks, sample, H, f.top, badgeSize), f.left, f.top, badgeSize);
       }
     },
   },

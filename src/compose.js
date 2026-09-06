@@ -134,24 +134,59 @@ const srgbToLinear = c => {
 const luminance = ([r, g, b]) =>
   0.2126 * srgbToLinear(r) + 0.7152 * srgbToLinear(g) + 0.0722 * srgbToLinear(b);
 
-// Mean sRGB of a canvas region, read from a tiny downsample so this stays
-// cheap enough to run on every render.
-function meanRegionRGB(canvas, x, y, w, h) {
-  const S = 24;
-  const off = new OffscreenCanvas(S, S);
+// Band sampling runs on the interactive path, so it never touches the
+// full-size canvas: reading back a 1440x3120 surface cost ~15ms a frame and
+// blew the budget on a third of drag frames. Instead the photo is redrawn
+// into a 64px proxy with the same geometry and sampled from there.
+const PROXY_W = 64;
+
+export function makeSampler(image, W, H, rect) {
+  const pw = PROXY_W;
+  const ph = Math.max(1, Math.round(PROXY_W * H / W));
+  const off = new OffscreenCanvas(pw, ph);
   const o = off.getContext('2d', { willReadFrequently: true });
-  o.drawImage(canvas, x, y, Math.max(1, w), Math.max(1, h), 0, 0, S, S);
-  const { data } = o.getImageData(0, 0, S, S);
-  let r = 0, g = 0, b = 0;
-  for (let i = 0; i < data.length; i += 4) { r += data[i]; g += data[i + 1]; b += data[i + 2]; }
-  const n = data.length / 4;
-  return [r / n, g / n, b / n];
+  o.fillStyle = '#021118';
+  o.fillRect(0, 0, pw, ph);
+  if (image && rect) {
+    const s = pw / W;
+    o.drawImage(image, rect.x * s, rect.y * s, rect.w * s, rect.h * s);
+  }
+  let pixels = null;
+  try {
+    pixels = o.getImageData(0, 0, pw, ph);
+  } catch {
+    pixels = null;
+  }
+  // Mean sRGB of a horizontal band, plus the brightest row mean in it. A frame
+  // that is half bright and half dark averages to something middling, so the
+  // scrim is sized against the worst row rather than the mean of the whole band.
+  return function sampleBand(fromFrac, toFrac) {
+    if (!pixels) return null;
+    const y0 = clamp(Math.floor(ph * fromFrac), 0, ph - 1);
+    const y1 = clamp(Math.ceil(ph * toFrac), y0 + 1, ph);
+    let worst = null;
+    let worstL = -1;
+    for (let y = y0; y < y1; y++) {
+      let r = 0, g = 0, b = 0;
+      for (let x = 0; x < pw; x++) {
+        const i = (y * pw + x) * 4;
+        r += pixels.data[i]; g += pixels.data[i + 1]; b += pixels.data[i + 2];
+      }
+      const row = [r / pw, g / pw, b / pw];
+      const l = luminance(row);
+      if (l > worstL) { worstL = l; worst = row; }
+    }
+    return worst;
+  };
 }
+
+// Is this backdrop light enough that an on-dark mark would disappear into it?
+export const isLightBackdrop = rgb => (rgb ? luminance(rgb) > 0.28 : false);
 
 // Backdrop luminance the type needs to sit on. White display type only needs
 // the band knocked back; red hot is a light colour (L 0.213) so it needs the
 // backdrop close to black before it reads at all.
-export const TONE = { white: 0.13, red: 0.035 };
+export const TONE = { white: 0.13, red: 0.026 };
 
 // Smallest alpha of deep steel that pulls `rgb` down to `target` luminance.
 function alphaFor(rgb, target, floor) {
@@ -163,24 +198,23 @@ function alphaFor(rgb, target, floor) {
 }
 
 // A scrim sized to the photo underneath it, rather than a fixed alpha tuned
-// for dark art. Samples the band the type will occupy and darkens until the
-// type will actually read. Must run after the photo is drawn.
-export function protectBand(ctx, W, H, { fromFrac, toFrac = 1, tone = TONE.white, floor = 0.4, feather = 0.18 }) {
-  const y = Math.max(0, Math.round(H * fromFrac));
-  const h = Math.max(1, Math.round(H * (toFrac - fromFrac)));
-  let peak = floor;
-  try {
-    peak = alphaFor(meanRegionRGB(ctx.canvas, 0, y, W, h), tone, floor);
-  } catch {
-    peak = 0.9; // tainted or unreadable canvas: fail safe, not transparent
-  }
-  const fadeTop = Math.max(0, H * (fromFrac - feather));
-  const g = ctx.createLinearGradient(0, H * toFrac, 0, fadeTop);
+// for dark art. `sample` comes from makeSampler and reports the brightest row
+// in the band, so a half-bright frame is not averaged into a passing grade.
+export function protectBand(ctx, W, H, { fromFrac, toFrac = 1, tone = TONE.white, floor = 0.4, feather = 0.18, sample }) {
+  const from = clamp(fromFrac, 0, 1);
+  const to = clamp(toFrac, from + 0.001, 1);
+  const rgb = sample ? sample(from, to) : null;
+  const peak = rgb ? alphaFor(rgb, tone, floor) : 0.9;
+  const fadeTop = Math.max(0, H * (from - feather));
+  const bandTop = H * from;
+  const bandBottom = H * to;
+  const g = ctx.createLinearGradient(0, bandBottom, 0, fadeTop);
+  const holdStop = bandBottom - fadeTop > 0 ? (bandBottom - bandTop) / (bandBottom - fadeTop) : 1;
   g.addColorStop(0, `rgba(2,17,24,${peak})`);
-  g.addColorStop(Math.min(0.999, (H * toFrac - H * fromFrac) / (H * toFrac - fadeTop || 1)), `rgba(2,17,24,${peak})`);
+  g.addColorStop(clamp(holdStop, 0, 0.999), `rgba(2,17,24,${peak})`);
   g.addColorStop(1, 'rgba(2,17,24,0)');
   ctx.fillStyle = g;
-  ctx.fillRect(0, fadeTop, W, H * toFrac - fadeTop);
+  ctx.fillRect(0, fadeTop, W, bandBottom - fadeTop);
   return peak;
 }
 
@@ -193,13 +227,9 @@ export function scrimTop(ctx, W, H, toFrac = 0.35, strength = 0.85) {
 }
 
 // Flat hold-back across the whole plate, also sized to the photo.
-export function scrimFlat(ctx, W, H, { tone = TONE.white, floor = 0.4 } = {}) {
-  let a = floor;
-  try {
-    a = alphaFor(meanRegionRGB(ctx.canvas, 0, 0, W, H), tone, floor);
-  } catch {
-    a = 0.85;
-  }
+export function scrimFlat(ctx, W, H, { tone = TONE.white, floor = 0.4, sample } = {}) {
+  const rgb = sample ? sample(0, 1) : null;
+  const a = rgb ? alphaFor(rgb, tone, floor) : 0.85;
   ctx.fillStyle = `rgba(2,17,24,${a})`;
   ctx.fillRect(0, 0, W, H);
   return a;
@@ -259,7 +289,7 @@ export function monoStamp(ctx, text, x, y, size, color = BRAND.white, align = 'l
 // One layout pass shared by the draw and the height measurement, so the two
 // can never disagree about how many lines there are. Shrinks to fit
 // `maxLines`; hard-breaks a single word too long for the measure.
-export function layoutDisplay(ctx, text, { size, maxWidth, maxLines = 3, weight = WEIGHTS.black, lineHeight = 0.88 }) {
+export function layoutDisplay(ctx, text, { size, maxWidth, maxHeight = Infinity, maxLines = 3, weight = WEIGHTS.black, lineHeight = 0.88 }) {
   const words = String(text ?? '').toUpperCase().trim().split(/\s+/).filter(Boolean);
   if (!words.length) return { fontSize: size, lines: [], height: 0, lineHeight };
 
@@ -269,7 +299,8 @@ export function layoutDisplay(ctx, text, { size, maxWidth, maxLines = 3, weight 
   for (;;) {
     ctx.font = `${weight} ${fontSize}px ${BRAND.display}`;
     lines = wrap(ctx, words, maxWidth);
-    if (lines.length <= maxLines) break;
+    const height = (lines.length - 1) * fontSize * lineHeight + fontSize;
+    if (lines.length <= maxLines && height <= maxHeight) break;
     if (fontSize <= minSize) { lines = lines.slice(0, maxLines); break; }
     fontSize = Math.max(minSize, fontSize - Math.max(1, size * 0.04));
   }
@@ -340,6 +371,19 @@ export function tickerStrip(ctx, W, stripTop, stripH) {
     trackedText(ctx, unit, x, stripTop + stripH / 2, tracking);
   }
   ctx.restore();
+}
+
+// Fit one unbroken run into a box. The jersey number is drawn straight to the
+// canvas rather than through layoutDisplay, so it needs its own fit.
+export function fitLine(ctx, text, { size, maxWidth, maxHeight = Infinity, weight = WEIGHTS.black }) {
+  let fontSize = Math.min(size, maxHeight);
+  const minSize = size * 0.2;
+  for (;;) {
+    ctx.font = `${weight} ${fontSize}px ${BRAND.display}`;
+    if (ctx.measureText(text).width <= maxWidth || fontSize <= minSize) break;
+    fontSize = Math.max(minSize, fontSize - Math.max(1, size * 0.03));
+  }
+  return fontSize;
 }
 
 export function drawBadge(ctx, img, x, y, size) {
