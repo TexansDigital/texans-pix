@@ -21,6 +21,10 @@ directly; ES modules and canvas behave differently on `file://`.
 1. Put this week's frames in `library/photos/` (tuned for ~100).
 2. `npm run library`
 
+The manifest, thumbnails and display derivatives are generated, not committed
+— run `npm run library` once after a fresh clone or the picker will be empty.
+`npm run deploy` does it for you.
+
 That writes 400px thumbnails to `library/thumbs/` and regenerates
 `library/manifest.json`, which the studio reads on load. Filenames become
 titles, so `stroud-td-week04.jpg` shows as "Stroud TD Week04".
