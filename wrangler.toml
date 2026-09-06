@@ -1,0 +1,22 @@
+# Cloudflare Workers static assets deploy.
+#
+# The studio is entirely client-side, so this serves files and nothing else.
+# It works with a private repo, costs nothing on the free tier, and puts the
+# app on the same platform the rest of the plan assumes (R2 for originals,
+# Images for the derivative ladder).
+#
+# Deploy locally:
+#   npx wrangler login
+#   npm run library && npm run site
+#   npx wrangler deploy
+#
+# Or in CI: add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID as repo secrets
+# and .github/workflows/cloudflare.yml takes it from there.
+
+name = "texans-wallpaper-studio"
+compatibility_date = "2026-01-01"
+
+[assets]
+directory = "./_site"
+# Serve index.html for bare paths; this is a single-page static app.
+not_found_handling = "single-page-application"

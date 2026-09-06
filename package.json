@@ -6,7 +6,9 @@
   "description": "Houston Texans Wallpaper Studio - client-side wallpaper composer",
   "scripts": {
     "start": "python3 -m http.server 8080",
-    "library": "node tools/build-library.mjs"
+    "library": "node tools/build-library.mjs",
+    "site": "node tools/build-site.mjs",
+    "deploy": "npm run library && npm run site && wrangler deploy"
   },
   "devDependencies": {
     "sharp": "^0.34.5"

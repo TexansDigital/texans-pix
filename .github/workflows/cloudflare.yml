@@ -1,0 +1,28 @@
+name: Deploy studio to Cloudflare
+
+# Works with a private repo, unlike GitHub Pages on a free plan.
+# Needs two repository secrets: CLOUDFLARE_API_TOKEN (Workers Scripts: Edit)
+# and CLOUDFLARE_ACCOUNT_ID. Until those exist this workflow is inert.
+
+on:
+  push:
+    branches:
+      - main
+      - claude/gameday-photo-monetization-rybr7u
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: npm run library
+      - run: npm run site
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

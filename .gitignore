@@ -7,3 +7,4 @@ tests/*.jpg
 tests/fixtures/
 tests/exports/
 tests/fonts/
+_site/
