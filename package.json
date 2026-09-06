@@ -8,8 +8,9 @@
     "start": "python3 -m http.server 8080",
     "library": "node tools/build-library.mjs",
     "site": "node tools/build-site.mjs",
-    "deploy": "npm run library && npm run site && npx wrangler deploy",
-    "preview": "npm run library && npm run site && npx wrangler dev"
+    "deploy": "npm run check && npm run library && npm run site && npx wrangler deploy",
+    "preview": "npm run library && npm run site && npx wrangler dev",
+    "check": "node tools/preflight.mjs"
   },
   "devDependencies": {
     "sharp": "^0.35.4"
