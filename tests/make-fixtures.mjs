@@ -55,3 +55,7 @@ writeFileSync(OUT + 'square-1500.jpg', await (await pattern(1500, 1500)).jpeg({ 
 // 10. Tall screenshot
 writeFileSync(OUT + 'tall-1000x4000.jpg', await (await pattern(1000, 4000)).jpeg({ quality: 85 }).toBuffer());
 console.log('fixtures written to', OUT);
+// 11. Near-black plate, for the dark half of the contrast sweep.
+writeFileSync(OUT + 'dark-2000x3000.png', await sharp({ create: { width: 2000, height: 3000, channels: 3, background: { r: 8, g: 10, b: 12 } } }).png().toBuffer());
+// 12. Mid-grey plate — the case that fools an alpha tuned only for the extremes.
+writeFileSync(OUT + 'grey-2000x3000.png', await sharp({ create: { width: 2000, height: 3000, channels: 3, background: { r: 128, g: 128, b: 128 } } }).png().toBuffer());

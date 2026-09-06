@@ -1,7 +1,7 @@
 import { DEVICES, DEVICE_GROUPS, getDevice } from './devices.js';
 import { TEMPLATES, getTemplate } from './templates.js';
 import {
-  loadFonts, decodeImage, coverRect, clamp, drawGuides, ImageError,
+  loadFonts, decodeImage, coverRect, coverSlack, clamp, drawGuides, ImageError,
 } from './compose.js';
 
 const $ = sel => document.querySelector(sel);
@@ -12,6 +12,8 @@ const state = {
   template: TEMPLATES[0],
   image: null,
   imageLabel: '',
+  sourceWidth: 0,
+  sourceHeight: 0,
   zoom: 1,
   panX: 0,
   panY: 0,
@@ -21,7 +23,12 @@ const state = {
 
 const marks = {};
 const canvas = $('#stage');
-const ctx = canvas.getContext('2d', { alpha: false });
+const ctx = canvas.getContext('2d', { alpha: false, willReadFrequently: true });
+
+// Desktop has no lock screen, so asking for one would leave the guides and the
+// safe band undefined. Everything downstream reads this, never state.surface.
+const effectiveSurface = () =>
+  state.surface === 'lock' && !state.device.lock ? 'home' : state.surface;
 
 // --- rendering -------------------------------------------------------------
 
@@ -34,6 +41,7 @@ function scheduleRender() {
 
 function render(withGuides) {
   const { w: W, h: H } = state.device;
+  const surface = effectiveSurface();
   if (canvas.width !== W || canvas.height !== H) {
     canvas.width = W;
     canvas.height = H;
@@ -48,11 +56,9 @@ function render(withGuides) {
     placeholder(W, H);
   }
 
-  state.template.draw(ctx, {
-    W, H, device: state.device, surface: state.surface, fields: state.fields, marks,
-  });
+  state.template.draw(ctx, { W, H, device: state.device, surface, fields: state.fields, marks });
 
-  if (withGuides) drawGuides(ctx, W, H, state.device, state.surface);
+  if (withGuides) drawGuides(ctx, W, H, state.device, surface);
 }
 
 function placeholder(W, H) {
@@ -68,22 +74,41 @@ function placeholder(W, H) {
 
 // --- photo loading ---------------------------------------------------------
 
+// A big photo takes ~750ms to decode and a small one ~50ms, so without a
+// generation guard a fan's second pick loses to their first.
+let loadGeneration = 0;
+
 async function useSource(source, label) {
-  setStatus('Decoding photo…');
+  const generation = ++loadGeneration;
+  setStatus(`Decoding ${label}…`);
   try {
-    const bitmap = await decodeImage(source);
-    if (state.image && state.image.close) state.image.close();
+    const { bitmap, sourceWidth, sourceHeight, downscaled } = await decodeImage(source);
+    if (generation !== loadGeneration) { bitmap.close?.(); return; }
+
+    state.image?.close?.();
     state.image = bitmap;
     state.imageLabel = label;
+    state.sourceWidth = sourceWidth;
+    state.sourceHeight = sourceHeight;
     state.zoom = 1;
     state.panX = 0;
     state.panY = 0;
     $('#zoom').value = '1';
-    setStatus(`${label} — ${bitmap.width} x ${bitmap.height}`);
+    $('#export').disabled = false;
+
+    // Report the photo's real size, not the post-cap size.
+    let note = `${label} — ${sourceWidth} x ${sourceHeight}`;
+    if (downscaled) note += ' (scaled down for speed)';
+    const upscale = state.device.w / bitmap.width;
+    if (upscale > 1.6) {
+      setStatus(`${note} — small for this screen, it will look soft`, true);
+    } else {
+      setStatus(note);
+    }
     scheduleRender();
   } catch (err) {
-    const message = err instanceof ImageError ? err.message : 'That photo could not be opened.';
-    setStatus(message, true);
+    if (generation !== loadGeneration) return;
+    setStatus(err instanceof ImageError ? err.message : 'That photo could not be opened.', true);
     console.error('[studio]', err);
   }
 }
@@ -122,6 +147,14 @@ function buildDeviceSelect() {
   sel.value = state.device.id;
 }
 
+function syncSurfaceControls() {
+  const lockRadio = document.querySelector('[name="surface"][value="lock"]');
+  const noLock = !state.device.lock;
+  lockRadio.disabled = noLock;
+  lockRadio.closest('label').classList.toggle('off', noLock);
+  if (noLock) document.querySelector('[name="surface"][value="home"]').checked = true;
+}
+
 function buildTemplateList() {
   const wrap = $('#templates');
   for (const t of TEMPLATES) {
@@ -147,6 +180,7 @@ async function buildLibrary() {
     if (!res.ok) throw new Error(String(res.status));
     const manifest = await res.json();
     const photos = manifest.photos || [];
+    grid.innerHTML = ''; // clear the loading line before anything is appended
     if (!photos.length) {
       grid.innerHTML = '<p class="empty">No photos in the library yet. Drop this week\'s files into <code>library/photos/</code> and run <code>npm run library</code>.</p>';
       return;
@@ -169,7 +203,7 @@ async function buildLibrary() {
       });
       grid.appendChild(btn);
     }
-  } catch (err) {
+  } catch {
     grid.innerHTML = '<p class="empty">Library manifest missing. Run <code>npm run library</code> to build it.</p>';
   }
 }
@@ -189,6 +223,7 @@ function wireFields() {
 function wirePanZoom() {
   let dragging = false;
   let startX = 0, startY = 0, startPanX = 0, startPanY = 0;
+  let gainX = 0, gainY = 0;
 
   canvas.addEventListener('pointerdown', e => {
     if (!state.image) return;
@@ -196,16 +231,25 @@ function wirePanZoom() {
     canvas.setPointerCapture(e.pointerId);
     startX = e.clientX; startY = e.clientY;
     startPanX = state.panX; startPanY = state.panY;
+
+    // Pan is a fraction of the available slack, so the pointer delta has to be
+    // divided by that slack measured in *displayed* pixels. Dividing by half
+    // the preview instead made the gain swing from 0.2x to 51x with the photo
+    // aspect and zoom.
+    const rect = canvas.getBoundingClientRect();
+    const shown = rect.width / canvas.width || 1;
+    const slack = coverSlack(state.image, state.device.w, state.device.h, state.zoom);
+    gainX = slack.x * shown;
+    gainY = slack.y * shown;
   });
+
   canvas.addEventListener('pointermove', e => {
     if (!dragging) return;
-    const rect = canvas.getBoundingClientRect();
-    // Pan is normalised -1..1 across the available slack, so translate the
-    // pointer delta by the displayed size rather than the canvas pixel size.
-    state.panX = clamp(startPanX + (e.clientX - startX) / (rect.width / 2), -1, 1);
-    state.panY = clamp(startPanY + (e.clientY - startY) / (rect.height / 2), -1, 1);
+    if (gainX > 0.5) state.panX = clamp(startPanX + (e.clientX - startX) / gainX, -1, 1);
+    if (gainY > 0.5) state.panY = clamp(startPanY + (e.clientY - startY) / gainY, -1, 1);
     scheduleRender();
   });
+
   const end = e => {
     if (!dragging) return;
     dragging = false;
@@ -225,7 +269,9 @@ function wireFileInput() {
   input.addEventListener('change', () => {
     const file = input.files && input.files[0];
     if (file) useSource(file, file.name);
+    input.value = ''; // so picking the same file twice still fires
   });
+  $('#pick').addEventListener('click', () => input.click());
 
   const drop = $('#dropzone');
   ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => {
@@ -241,12 +287,16 @@ function wireFileInput() {
 }
 
 async function exportWallpaper() {
+  if (!state.image) {
+    setStatus('Pick a photo first.', true);
+    return;
+  }
   // Guides are preview-only: re-render clean before reading the canvas.
   render(false);
   const { w, h } = state.device;
   const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.94));
   if (!blob) { setStatus('Export failed.', true); return; }
-  const stamp = `${state.device.id}-${state.surface}-${state.template.id}`;
+  const stamp = `${state.device.id}-${effectiveSurface()}-${state.template.id}`;
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -278,15 +328,17 @@ async function init() {
   wireFields();
   wirePanZoom();
   wireFileInput();
+  syncSurfaceControls();
 
   $('#device').addEventListener('change', e => {
     state.device = getDevice(e.target.value);
     $('#dims').textContent = `${state.device.w} x ${state.device.h}`;
+    syncSurfaceControls();
     scheduleRender();
   });
   document.querySelectorAll('[name="surface"]').forEach(radio => {
     radio.addEventListener('change', () => {
-      state.surface = radio.value;
+      if (radio.checked) state.surface = radio.value;
       scheduleRender();
     });
   });
@@ -295,15 +347,17 @@ async function init() {
     scheduleRender();
   });
   $('#export').addEventListener('click', exportWallpaper);
-
+  $('#export').disabled = true;
   $('#dims').textContent = `${state.device.w} x ${state.device.h}`;
 
-  const loaded = await loadFonts();
-  if (loaded.length < 4) {
-    setStatus(`Only ${loaded.length} of 4 display cuts loaded — type will fall back.`, true);
-  }
+  const fonts = await loadFonts();
+  const warnings = [];
+  if (fonts.display.length < 4) warnings.push(`${4 - fonts.display.length} of 4 display cuts missing`);
+  if (!fonts.mono) warnings.push('the mono face did not load');
   await loadMarks();
   scheduleRender();
+  if (warnings.length) setStatus(`Type will fall back — ${warnings.join(', ')}.`, true);
+  else setStatus('Pick a photo to start');
   buildLibrary();
 }
 
@@ -314,7 +368,8 @@ window.__studio = {
   state,
   render,
   useSource,
-  setDevice: id => { state.device = getDevice(id); scheduleRender(); },
+  effectiveSurface,
+  setDevice: id => { state.device = getDevice(id); syncSurfaceControls(); scheduleRender(); },
   setTemplate: id => { state.template = getTemplate(id); scheduleRender(); },
   setSurface: s => { state.surface = s; scheduleRender(); },
   setFields: patch => { Object.assign(state.fields, patch); scheduleRender(); },

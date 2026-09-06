@@ -8,23 +8,35 @@
 //   - no sponsor mark is ever baked into the file (see README)
 
 import {
-  BRAND, WEIGHTS, scrimBottom, scrimTop, scrimFlat, rule,
-  monoStamp, displayBlock, tickerStrip, drawBadge,
+  BRAND, WEIGHTS, TONE, protectBand, scrimTop, scrimFlat, rule,
+  monoStamp, layoutDisplay, drawDisplay, tickerStrip, drawBadge,
 } from './compose.js';
+
+// A field counts as present only if it has non-whitespace in it. A single
+// space used to slip through every `||` fallback and blank the hero line.
+const has = v => typeof v === 'string' ? v.trim().length > 0 : v != null && String(v).trim().length > 0;
+const val = v => String(v ?? '').trim();
+
+// First non-blank value, so `headline: ' '` falls through to the next option.
+export const pick = (...vals) => vals.find(has) !== undefined ? val(vals.find(has)) : '';
+
+// `SEC 132` only when there is a section. Prevents the bare label that a
+// whitespace-only field used to leave behind.
+const labeled = (label, v) => (has(v) ? `${label} ${val(v)}` : '');
 
 // Join non-empty parts with the brand separator so an empty field never
 // leaves an orphan `//`.
-export const join = (...parts) => parts.map(p => (p == null ? '' : String(p).trim()))
-  .filter(Boolean).join(' // ');
+export const join = (...parts) => parts.filter(has).map(val).join(' // ');
 
 const MARGIN = 0.062; // side margin as a fraction of width
 
 function frame(W, H, device, surface) {
   const m = Math.round(W * MARGIN);
+  const lock = surface === 'lock' ? device.lock : null;
   let top, bottom;
-  if (surface === 'lock' && device.lock) {
-    top = H * (device.lock.widgetBottom + 0.02);
-    bottom = H * (device.lock.controlsTop - 0.03);
+  if (lock) {
+    top = H * (lock.widgetBottom + 0.02);
+    bottom = H * (lock.controlsTop - 0.03);
   } else {
     const home = device.home || { statusBottom: 0.05, dockTop: 0.86 };
     top = H * (home.statusBottom + 0.03);
@@ -40,24 +52,20 @@ export const TEMPLATES = [
     note: 'Bottom scrim, heavy display line, red rule. The default.',
     draw(ctx, { W, H, device, surface, fields, marks }) {
       const f = frame(W, H, device, surface);
-      scrimBottom(ctx, W, H, 0.42, 0.94);
+      protectBand(ctx, W, H, { fromFrac: 0.42, tone: TONE.white, floor: 0.5 });
 
       const stampSize = Math.max(16, W * 0.026);
-      const kicker = join(fields.kicker, fields.section && `SEC ${fields.section}`);
+      const kicker = join(fields.kicker, labeled('SEC', fields.section));
       let y = f.bottom;
 
-      if (kicker) {
-        monoStamp(ctx, kicker, f.left, y, stampSize, 'rgba(255,255,255,.72)');
+      if (has(kicker)) {
+        monoStamp(ctx, kicker, f.left, y, stampSize, 'rgba(255,255,255,.78)', 'left', f.width);
         y -= stampSize * 2.4;
       }
-      const headline = fields.headline || fields.name || 'HOUSTON TEXANS';
-      const size = Math.round(W * 0.135);
-      ctx.font = `${WEIGHTS.black} ${size}px ${BRAND.display}`;
-      const probe = displayBlockHeight(ctx, headline, size, f.width);
-      y -= probe;
-      displayBlock(ctx, headline, {
-        x: f.left, y, size, maxWidth: f.width, color: BRAND.white, maxLines: 3,
-      });
+      const headline = pick(fields.headline, fields.name, 'HOUSTON TEXANS');
+      const layout = layoutDisplay(ctx, headline, { size: Math.round(W * 0.135), maxWidth: f.width, maxLines: 3 });
+      y -= layout.height;
+      drawDisplay(ctx, layout, { x: f.left, y, color: BRAND.white });
       y -= Math.round(H * 0.022);
       rule(ctx, f.left, y, Math.round(W * 0.16), Math.max(4, Math.round(H * 0.0055)));
 
@@ -71,19 +79,19 @@ export const TEMPLATES = [
     note: 'Mono data block only. Keeps the frame clear — best for lock screens.',
     draw(ctx, { W, H, device, surface, fields }) {
       const f = frame(W, H, device, surface);
-      scrimBottom(ctx, W, H, 0.66, 0.8);
+      protectBand(ctx, W, H, { fromFrac: 0.64, tone: TONE.white, floor: 0.45 });
 
       const size = Math.max(18, W * 0.030);
       const lines = [
         join(fields.kicker),
-        join(fields.name, fields.number && `NO ${fields.number}`),
-        join(fields.section && `SECTION ${fields.section}`, fields.since && `SINCE ${fields.since}`),
-      ].filter(Boolean);
+        join(fields.name, labeled('NO', fields.number)),
+        join(labeled('SECTION', fields.section), labeled('SINCE', fields.since)),
+      ].filter(has);
 
       let y = f.bottom;
       for (let i = lines.length - 1; i >= 0; i--) {
-        const color = i === 0 ? BRAND.battleRed : 'rgba(255,255,255,.9)';
-        monoStamp(ctx, lines[i], f.left, y, size, color);
+        const color = i === 0 ? BRAND.battleRed : 'rgba(255,255,255,.92)';
+        monoStamp(ctx, lines[i], f.left, y, size, color, 'left', f.width);
         y -= size * 2.1;
       }
       y -= size * 0.4;
@@ -97,8 +105,8 @@ export const TEMPLATES = [
     note: 'Flat scrim with the bullhead held back behind the type.',
     draw(ctx, { W, H, device, surface, fields, marks }) {
       const f = frame(W, H, device, surface);
-      scrimFlat(ctx, W, H, 0.58);
-      scrimBottom(ctx, W, H, 0.5, 0.7);
+      // Red hot needs a near-black backdrop before it reads at all.
+      scrimFlat(ctx, W, H, { tone: TONE.red, floor: 0.5 });
 
       if (marks.bullhead) {
         ctx.save();
@@ -110,21 +118,18 @@ export const TEMPLATES = [
 
       const stampSize = Math.max(16, W * 0.026);
       let y = f.bottom;
-      const foot = join(fields.section && `SECTION ${fields.section}`, fields.since && `SINCE ${fields.since}`);
-      if (foot) {
-        monoStamp(ctx, foot, W / 2, y, stampSize, 'rgba(255,255,255,.7)', 'center');
+      const foot = join(labeled('SECTION', fields.section), labeled('SINCE', fields.since));
+      if (has(foot)) {
+        monoStamp(ctx, foot, W / 2, y, stampSize, 'rgba(255,255,255,.8)', 'center', f.width);
         y -= stampSize * 2.6;
       }
-      const headline = fields.headline || fields.name || 'WE FINISH WHAT WE START';
-      const size = Math.round(W * 0.115);
-      ctx.font = `${WEIGHTS.black} ${size}px ${BRAND.display}`;
-      y -= displayBlockHeight(ctx, headline, size, f.width);
-      displayBlock(ctx, headline, {
-        x: W / 2, y, size, maxWidth: f.width, color: BRAND.redHot, align: 'center', maxLines: 3,
-      });
-      if (fields.kicker) {
+      const headline = pick(fields.headline, fields.name, 'WE FINISH WHAT WE START');
+      const layout = layoutDisplay(ctx, headline, { size: Math.round(W * 0.115), maxWidth: f.width, maxLines: 3 });
+      y -= layout.height;
+      drawDisplay(ctx, layout, { x: W / 2, y, color: BRAND.redHot, align: 'center' });
+      if (has(fields.kicker)) {
         y -= stampSize * 2.2;
-        monoStamp(ctx, fields.kicker, W / 2, y, stampSize, 'rgba(255,255,255,.8)', 'center');
+        monoStamp(ctx, fields.kicker, W / 2, y, stampSize, 'rgba(255,255,255,.85)', 'center', f.width);
       }
     },
   },
@@ -132,27 +137,28 @@ export const TEMPLATES = [
   {
     id: 'ticker',
     label: 'Ticker',
-    note: 'The brand ticker strip along the bottom edge.',
+    note: 'The brand ticker strip along the bottom of the safe area.',
     draw(ctx, { W, H, device, surface, fields }) {
       const f = frame(W, H, device, surface);
       const stripH = Math.round(H * 0.028);
-      scrimBottom(ctx, W, H, 0.5, 0.9);
-      tickerStrip(ctx, W, H, stripH);
+      // On a lock screen the true bottom edge sits under the flashlight and
+      // camera controls, so the strip rides the bottom of the safe band.
+      const stripTop = surface === 'lock' && device.lock ? Math.round(f.bottom) : H - stripH;
+
+      protectBand(ctx, W, H, { fromFrac: 0.5, toFrac: (stripTop + stripH) / H, tone: TONE.white, floor: 0.5 });
+      tickerStrip(ctx, W, stripTop, stripH);
 
       const stampSize = Math.max(16, W * 0.026);
-      let y = f.bottom - stripH * 1.4;
-      const kicker = join(fields.kicker, fields.section && `SEC ${fields.section}`, fields.since && `SINCE ${fields.since}`);
-      if (kicker) {
-        monoStamp(ctx, kicker, f.left, y, stampSize, 'rgba(255,255,255,.75)');
+      let y = stripTop - stripH * 0.6;
+      const kicker = join(fields.kicker, labeled('SEC', fields.section), labeled('SINCE', fields.since));
+      if (has(kicker)) {
+        monoStamp(ctx, kicker, f.left, y, stampSize, 'rgba(255,255,255,.8)', 'left', f.width);
         y -= stampSize * 2.4;
       }
-      const headline = fields.headline || fields.name || 'HOUSTON';
-      const size = Math.round(W * 0.155);
-      ctx.font = `${WEIGHTS.black} ${size}px ${BRAND.display}`;
-      y -= displayBlockHeight(ctx, headline, size, f.width);
-      displayBlock(ctx, headline, {
-        x: f.left, y, size, maxWidth: f.width, color: BRAND.white, maxLines: 2,
-      });
+      const headline = pick(fields.headline, fields.name, 'HOUSTON');
+      const layout = layoutDisplay(ctx, headline, { size: Math.round(W * 0.155), maxWidth: f.width, maxLines: 2 });
+      y -= layout.height;
+      drawDisplay(ctx, layout, { x: f.left, y, color: BRAND.white });
     },
   },
 
@@ -162,73 +168,43 @@ export const TEMPLATES = [
     note: 'Your number as the hero. Needs a number to earn its keep.',
     draw(ctx, { W, H, device, surface, fields, marks }) {
       const f = frame(W, H, device, surface);
-      scrimBottom(ctx, W, H, 0.38, 0.94);
+      const number = val(fields.number).toUpperCase().slice(0, 2);
+      // The number is red hot and huge; the band under it has to go near-black.
+      protectBand(ctx, W, H, { fromFrac: 0.34, tone: has(number) ? TONE.red : TONE.white, floor: 0.5 });
       scrimTop(ctx, W, H, 0.28, 0.5);
 
-      const number = (fields.number || '').trim();
       let y = f.bottom;
 
-      const foot = join(fields.kicker, fields.section && `SEC ${fields.section}`);
+      const foot = join(fields.kicker, labeled('SEC', fields.section));
       const stampSize = Math.max(16, W * 0.026);
-      if (foot) {
-        monoStamp(ctx, foot, f.left, y, stampSize, 'rgba(255,255,255,.72)');
+      if (has(foot)) {
+        monoStamp(ctx, foot, f.left, y, stampSize, 'rgba(255,255,255,.78)', 'left', f.width);
         y -= stampSize * 2.6;
       }
 
-      const name = fields.name || fields.headline || 'HOUSTON TEXANS';
-      const nameSize = Math.round(W * 0.088);
-      ctx.font = `${WEIGHTS.black} ${nameSize}px ${BRAND.display}`;
-      y -= displayBlockHeight(ctx, name, nameSize, f.width);
-      displayBlock(ctx, name, {
-        x: f.left, y, size: nameSize, maxWidth: f.width, color: BRAND.white, maxLines: 2,
-      });
+      const name = pick(fields.name, fields.headline, 'HOUSTON TEXANS');
+      const layout = layoutDisplay(ctx, name, { size: Math.round(W * 0.088), maxWidth: f.width, maxLines: 2 });
+      y -= layout.height;
+      drawDisplay(ctx, layout, { x: f.left, y, color: BRAND.white });
 
-      if (number) {
+      if (has(number)) {
         const numSize = Math.round(W * 0.42);
         ctx.save();
         ctx.font = `${WEIGHTS.black} ${numSize}px ${BRAND.display}`;
         ctx.textBaseline = 'alphabetic';
         ctx.fillStyle = BRAND.redHot;
         y -= Math.round(numSize * 0.16);
-        ctx.fillText(number.slice(0, 2), f.left, y);
+        ctx.fillText(number, f.left, y);
         ctx.restore();
         y -= numSize * 0.86;
       } else {
         y -= Math.round(H * 0.02);
         rule(ctx, f.left, y, Math.round(W * 0.16), Math.max(4, Math.round(H * 0.0055)));
-      }
-
-      if (marks.bullhead && !number) {
-        drawBadge(ctx, marks.bullhead, f.left, f.top, W * 0.12);
+        if (marks.bullhead) drawBadge(ctx, marks.bullhead, f.left, f.top, W * 0.12);
       }
     },
   },
 ];
-
-// displayBlock wraps and shrinks internally; this mirrors that so callers can
-// reserve the right vertical space before drawing.
-function displayBlockHeight(ctx, text, size, maxWidth, maxLines = 3, lineHeight = 0.88) {
-  const words = String(text).toUpperCase().trim().split(/\s+/).filter(Boolean);
-  if (!words.length) return 0;
-  let fontSize = size;
-  const minSize = size * 0.45;
-  let lines = [];
-  while (fontSize >= minSize) {
-    ctx.font = `${WEIGHTS.black} ${fontSize}px ${BRAND.display}`;
-    lines = [];
-    let line = '';
-    for (const word of words) {
-      const candidate = line ? `${line} ${word}` : word;
-      if (line && ctx.measureText(candidate).width > maxWidth) { lines.push(line); line = word; }
-      else line = candidate;
-    }
-    if (line) lines.push(line);
-    if (lines.length <= maxLines && !lines.some(l => ctx.measureText(l).width > maxWidth)) break;
-    fontSize -= Math.max(1, Math.round(size * 0.04));
-  }
-  const count = Math.min(lines.length, maxLines);
-  return (count - 1) * fontSize * lineHeight + fontSize;
-}
 
 export function getTemplate(id) {
   return TEMPLATES.find(t => t.id === id) || TEMPLATES[0];

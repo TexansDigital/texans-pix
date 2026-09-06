@@ -6,3 +6,4 @@ tests/*.jpg
 .DS_Store
 tests/fixtures/
 tests/exports/
+tests/fonts/
