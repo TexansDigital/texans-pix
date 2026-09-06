@@ -1,0 +1,14 @@
+{
+  "name": "texans-wallpaper-studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Houston Texans Wallpaper Studio - client-side wallpaper composer",
+  "scripts": {
+    "start": "python3 -m http.server 8080",
+    "library": "node tools/build-library.mjs"
+  },
+  "devDependencies": {
+    "sharp": "^0.34.5"
+  }
+}

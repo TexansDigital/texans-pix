@@ -1,0 +1,171 @@
+:root{
+  /* Core brand */
+  --deep-steel:#021118;      /* primary dark ground, from the 2026 deck */
+  --deep-steel-2:#02202f;    /* lifted steel, panels on dark */
+  --battle-red:#eb0028;      /* primary action / emphasis red */
+  --red-hot:#ff0000;         /* pure red used for display type on dark art */
+  --liberty-white:#ffffff;
+  --htown-blue:#0080c6;      /* H-Town alternate identity */
+  --htown-sky:#87b3d0;       /* washed blue in H-Town flag art */
+
+  /* Neutrals */
+  --steel-900:#021118;
+  --steel-800:#0a1d27;
+  --steel-700:#13303d;
+  --steel-600:#2b4a58;
+  --steel-500:#5a7481;
+  --steel-400:#8fa3ad;
+  --steel-300:#c2ced4;
+  --steel-200:#e2e8ea;
+  --steel-100:#f1f4f5;
+  --steel-050:#f8fafa;
+
+  /* Semantic — text */
+  --text-strong:var(--liberty-white);
+  --text-body:rgba(255,255,255,.82);
+  --text-muted:rgba(255,255,255,.55);
+  --text-accent:var(--battle-red);
+  --text-inverse:var(--deep-steel);
+  --text-body-inverse:rgba(2,17,24,.78);
+  --text-muted-inverse:rgba(2,17,24,.52);
+
+  /* Semantic — surfaces */
+  --surface-page:var(--deep-steel);
+  --surface-card:rgba(255,255,255,.05);
+  --surface-card-solid:var(--steel-800);
+  --surface-raised:var(--steel-700);
+  --surface-page-light:var(--liberty-white);
+  --surface-card-light:var(--steel-100);
+
+  /* Semantic — lines */
+  --line-hairline:rgba(255,255,255,.14);
+  --line-strong:rgba(255,255,255,.28);
+  --line-hairline-inverse:rgba(2,17,24,.14);
+  --line-accent:var(--battle-red);
+
+  /* Semantic — action */
+  --action-primary:var(--battle-red);
+  --action-primary-hover:#ff123a;
+  --action-primary-press:#c60021;
+  --action-secondary:var(--liberty-white);
+  --action-alt:var(--htown-blue);
+  --action-alt-hover:#149ae4;
+  --focus-ring:var(--battle-red);
+
+  /* Status */
+  --status-win:#1fae5a;
+  --status-warn:#f5a623;
+  --status-loss:var(--battle-red);
+  --status-info:var(--htown-blue);
+}
+
+/* Light ("H-Town") scope — flip the semantics, keep the same names. */
+.theme-htown{
+  --text-strong:var(--deep-steel);
+  --text-body:rgba(2,17,24,.78);
+  --text-muted:rgba(2,17,24,.52);
+  --text-inverse:var(--liberty-white);
+  --surface-page:var(--liberty-white);
+  --surface-card:rgba(2,17,24,.04);
+  --surface-card-solid:var(--steel-100);
+  --surface-raised:var(--liberty-white);
+  --line-hairline:rgba(2,17,24,.14);
+  --line-strong:rgba(2,17,24,.3);
+  --action-secondary:var(--deep-steel);
+}
+:root{
+  /* Families — real HelveticaNeueLT Extended cuts, see tokens/fonts.css */
+  --font-display:"HelveticaNeueLT Ex","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --font-body:"Helvetica Neue",Helvetica,Arial,sans-serif;
+  --font-mono:"Azeret Mono",ui-monospace,"SF Mono",Menlo,monospace;
+
+  /* Weights map 1:1 onto the supplied cuts. There is no lighter or narrower cut — if you
+     need something quieter, switch to --font-body rather than narrowing the display face. */
+  --weight-black:900;   /* HelveticaNeueLTStd BlkEx */
+  --weight-heavy:800;   /* HelveticaNeueLTPro HvEx */
+  --weight-bold:700;    /* HelveticaNeueLTStd BdEx */
+  --weight-medium:500;  /* HelveticaNeueLTStd MdEx */
+
+  /* Display scale (1920×1080 slide basis) */
+  --size-hero:128px;      /* 96pt title slide */
+  --size-display:88px;    /* 66pt section header */
+  --size-headline:56px;
+  --size-subhead:48px;    /* 36pt */
+  --size-title:32px;
+  --size-body-lg:27px;    /* 20pt deck body */
+  --size-body:18px;
+  --size-small:15px;
+  --size-caption:12px;    /* data-stamp captions */
+
+  --leading-tight:.86;    /* stacked display lockups */
+  --leading-snug:1.05;
+  --leading-normal:1.45;
+  --leading-loose:1.6;
+
+  --tracking-display:-0.01em;
+  --tracking-normal:0;
+  --tracking-caption:0.18em;  /* mono stamps + eyebrows */
+  --tracking-wide:0.08em;
+}
+:root{
+  /* The brand is hard-edged. Radii are near-zero by default; pills are for tags only. */
+  --radius-none:0;
+  --radius-xs:2px;
+  --radius-sm:4px;
+  --radius-pill:999px;
+
+  --border-hairline:1px solid var(--line-hairline);
+  --border-strong:2px solid var(--line-strong);
+  --border-accent:3px solid var(--battle-red);
+  --rule-thick:6px;
+
+  /* Shadows are used sparingly — depth comes from value contrast, not blur. */
+  --shadow-none:none;
+  --shadow-card:0 2px 0 0 rgba(2,17,24,.35);
+  --shadow-raised:0 12px 32px -12px rgba(2,17,24,.7);
+
+  /* Protection scrims for type over photography */
+  --scrim-bottom:linear-gradient(to top,rgba(2,17,24,.92) 0%,rgba(2,17,24,.55) 38%,rgba(2,17,24,0) 78%); /* @kind other */
+  --scrim-left:linear-gradient(to right,rgba(2,17,24,.9) 0%,rgba(2,17,24,0) 62%); /* @kind other */
+  --scrim-flat:rgba(2,17,24,.62);
+
+  --blur-panel:blur(14px); /* @kind other */
+}
+:root{
+  --space-1:4px;
+  --space-2:8px;
+  --space-3:12px;
+  --space-4:16px;
+  --space-5:24px;
+  --space-6:32px;
+  --space-7:48px;
+  --space-8:64px;
+  --space-9:96px;
+  --space-10:128px;
+
+  /* Slide geometry, derived from the PPT master (12192000×6858000 EMU = 1920×1080) */
+  --slide-w:1920px;
+  --slide-h:1080px;
+  --slide-margin-x:55px;   /* 350520 EMU */
+  --slide-margin-y:48px;
+  --slide-ticker-h:36px;   /* repeating wordmark strip at the bottom edge */
+  --slide-mark:96px;       /* corner bullhead badge */
+
+  /* Document geometry */
+  --doc-margin:72px;
+  --measure:68ch;
+}
+:root{
+  --ease-drive:cubic-bezier(.2,.8,.2,1); /* @kind other */   /* default: fast out, settled */
+  --ease-snap:cubic-bezier(.16,1,.3,1); /* @kind other */    /* wipes, reveals */
+  --ease-linear:linear; /* @kind other */                    /* ticker marquee only */
+
+  --dur-instant:80ms; /* @kind other */
+  --dur-fast:140ms; /* @kind other */
+  --dur-base:220ms; /* @kind other */
+  --dur-slow:420ms; /* @kind other */
+  --dur-marquee:28s; /* @kind other */
+
+  --lift-press:translateY(1px); /* @kind other */
+  --wipe-in:translateX(-8px); /* @kind other */
+}
