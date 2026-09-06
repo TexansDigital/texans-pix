@@ -7,6 +7,7 @@ const browser = await chromium.launch({ executablePath: process.env.PW_CHROMIUM 
 const page = await browser.newPage({ viewport: { width: 1400, height: 1000 } });
 const errors = [];
 page.on('pageerror', e => errors.push(e.message));
+page.on('dialog', d => d.accept());
 await page.goto(URL);
 await page.waitForFunction(() => window.__studio, null, { timeout: 20000 });
 await page.evaluate(() => document.fonts.ready);
@@ -26,6 +27,8 @@ results.libraryRoundTrip = await page.evaluate(async () => {
   await s.keepCurrent();
   await new Promise(r => setTimeout(r, 400));
 
+  window.__studio.setTab('saved');
+  await new Promise(r => setTimeout(r, 400));
   const cells = document.querySelectorAll('#collection .keep');
   const saved = cells.length;
   // Change everything, then restore from the saved cell.
@@ -42,7 +45,7 @@ results.libraryRoundTrip = await page.evaluate(async () => {
     surface: s.state.surface,
     name: s.state.fields.name,
     number: s.state.fields.number,
-    canvasW: document.querySelector('#stage').width,
+    deviceW: s.state.device.w,
     hasPhoto: !!s.state.image,
     selectSynced: document.querySelector('#device').value === s.state.device.id,
     fieldSynced: document.querySelector('[data-field="name"]').value === s.state.fields.name,
@@ -74,6 +77,8 @@ results.ownPhotoPrivacy = await page.evaluate(async () => {
 });
 
 results.remove = await page.evaluate(async () => {
+  window.__studio.setTab('saved');
+  await new Promise(r => setTimeout(r, 400));
   const before = document.querySelectorAll('#collection .keep').length;
   document.querySelector('#collection .keep .drop').click();
   await new Promise(r => setTimeout(r, 500));
@@ -87,7 +92,7 @@ const p = results.ownPhotoPrivacy;
 const checks = [
   ['save creates a collection entry', r.saved >= 1],
   ['restore returns the template', r.template === 'jersey'],
-  ['restore returns the device', r.device === 'ip-se' && r.canvasW === 750],
+  ['restore returns the device', r.device === 'ip-se' && r.deviceW === 750],
   ['restore returns the surface', r.surface === 'home'],
   ['restore returns the fields', r.name === 'MARIA GONZALEZ' && r.number === '04'],
   ['restore reloads the library photo', r.hasPhoto],

@@ -1,12 +1,13 @@
 {
   "version": 1,
-  "updated": "2026-09-06T19:58:51.259Z",
+  "updated": "2026-09-06T20:29:28.577Z",
   "count": 2,
   "photos": [
     {
       "id": "htown-body-clean",
       "file": "library/photos/htown-body-clean.jpg",
       "thumb": "library/thumbs/htown-body-clean.jpg",
+      "display": "library/display/htown-body-clean.jpg",
       "title": "Htown Body Clean",
       "width": 1920,
       "height": 1080,
@@ -16,6 +17,7 @@
       "id": "steel-body-clean",
       "file": "library/photos/steel-body-clean.jpg",
       "thumb": "library/thumbs/steel-body-clean.jpg",
+      "display": "library/display/steel-body-clean.jpg",
       "title": "Steel Body Clean",
       "width": 1920,
       "height": 1080,

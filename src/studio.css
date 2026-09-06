@@ -1,5 +1,11 @@
-/* Texans Wallpaper Studio — Steel identity.
-   Square corners, hairline rules, depth from value contrast not blur. */
+/* Texans Wallpaper Studio — Steel identity, phone first.
+   Square corners, hairline rules, depth from value contrast not blur.
+
+   The layout is five fixed bands with one scrolling region, because the whole
+   product is "change a thing, see the wallpaper react". A stacked document put
+   every control 700-2300px below the preview, so six of nine control groups
+   were used with the wallpaper entirely off screen. Nothing scrolls except the
+   sheet. */
 
 @font-face { font-family:"HelveticaNeueLT Ex"; src:url(../assets/fonts/HelveticaNeueLTStd-MdEx.otf) format("opentype"); font-weight:500; font-display:swap }
 @font-face { font-family:"HelveticaNeueLT Ex"; src:url(../assets/fonts/HelveticaNeueLTStd-BdEx.otf) format("opentype"); font-weight:700; font-display:swap }
@@ -8,23 +14,27 @@
 
 *, *::before, *::after { box-sizing: border-box }
 
+html, body { height: 100% }
 body {
   margin: 0;
   background: var(--deep-steel);
   color: var(--text-body);
   font-family: var(--font-body);
-  font-size: 15px;
-  line-height: 1.55;
+  font-size: 16px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+  /* Off-brand cyan flash on every tap, on a page whose only accent is red. */
+  -webkit-tap-highlight-color: rgba(235, 0, 40, .22);
 }
 
-h1 {
+h2 {
   font-family: var(--font-display);
   font-weight: var(--weight-black);
   text-transform: uppercase;
   letter-spacing: var(--tracking-display);
-  line-height: .9;
-  font-size: 22px;
+  font-size: 18px;
+  line-height: 1;
   margin: 0;
   color: var(--text-strong);
 }
@@ -36,90 +46,149 @@ h1 {
   letter-spacing: var(--tracking-caption);
   text-transform: uppercase;
   color: var(--text-muted);
+  margin: 0;
 }
 .stamp.dim { opacity: .8 }
+.hint { margin: 0; font-size: 13px; color: var(--text-muted) }
+.hint.tiny { font-size: 11px }
 
 :focus-visible { outline: 2px solid var(--battle-red); outline-offset: 2px }
 
-/* --- masthead ----------------------------------------------------------- */
+/* --- the five bands ------------------------------------------------------ */
 
-.mast {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  padding: var(--space-4) var(--space-6);
-  border-bottom: var(--rule-thick) solid var(--battle-red);
-  background: var(--steel-900);
-}
-.mast .bull { width: 38px; height: 38px; object-fit: contain }
-.mast-id { display: flex; flex-direction: column; gap: 4px }
-.mast-note { margin-left: auto; color: var(--htown-sky) }
-
-/* --- layout ------------------------------------------------------------- */
-
-.studio {
+.app {
   display: grid;
-  grid-template-columns: minmax(300px, 460px) 1fr;
-  gap: var(--space-7);
-  align-items: start;
-  padding: var(--space-7) var(--space-6) var(--space-9);
-  max-width: 1500px;
+  /* dvh, not vh: on iOS vh resolves against the URL-bar-hidden viewport, so a
+     60vh preview became 67-72% of what the fan could actually see. */
+  height: 100dvh;
+  grid-template-rows: auto minmax(0, 1fr) auto minmax(0, 1.05fr) auto;
+  padding-top: env(safe-area-inset-top);
+  max-width: 640px;
   margin: 0 auto;
 }
-@media (max-width: 940px) {
-  .studio { grid-template-columns: 1fr; gap: var(--space-6); padding: var(--space-5) var(--space-4) var(--space-8) }
-}
 
-/* --- preview ------------------------------------------------------------ */
-
-.preview { position: sticky; top: var(--space-5); display: flex; flex-direction: column; gap: var(--space-4) }
-@media (max-width: 940px) { .preview { position: static } }
-
-.canvas-hold {
-  background: var(--steel-800);
-  border: var(--border-hairline);
-  padding: var(--space-4);
+/* Band 1 — identity + live status */
+.bar {
   display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 8px var(--space-4);
+  border-bottom: var(--rule-thick) solid var(--battle-red);
+  background: var(--steel-900);
+  min-height: 62px;
+}
+.bar .bull { width: 26px; height: 26px; object-fit: contain; flex: none }
+.bar-text { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px }
+.bar-text .stamp {
+  color: var(--text-body);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.bar-text .stamp.err { color: var(--battle-red) }
+.device-btn {
+  display: flex; align-items: center; gap: 8px;
+  background: none; border: 0; padding: 0;
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: .14em; text-transform: uppercase;
+  color: var(--text-muted); cursor: pointer;
+  min-height: 44px;
+  align-self: flex-start;
+}
+.device-btn .edit { color: var(--htown-sky); text-decoration: underline }
+
+/* Band 2 — the preview, always on screen */
+.preview {
+  position: relative;
+  display: flex;
+  align-items: center;
   justify-content: center;
+  background: var(--steel-800);
+  overflow: hidden;
+  padding: 6px;
 }
 #stage {
   display: block;
   max-width: 100%;
-  max-height: 74vh;
-  width: auto;
-  height: auto;
-  touch-action: none;
-  cursor: grab;
+  max-height: 100%;
+  width: auto; height: auto;
   background: var(--deep-steel);
+  /* pinch-zoom stays available; JS preventDefaults only a real pan. */
+  touch-action: pinch-zoom;
+  cursor: grab;
 }
 #stage:active { cursor: grabbing }
-@media (max-width: 940px) { #stage { max-height: 60vh } }
 
-.status { margin: 0 }
-.status.err { color: var(--battle-red) }
+.chip-btn {
+  position: absolute;
+  top: 12px;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid var(--line-strong);
+  background: rgba(2, 17, 24, .74);
+  color: var(--text-strong);
+  font-family: var(--font-mono);
+  font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
+  cursor: pointer;
+}
+.chip-btn { left: 12px }
+.chip-btn.alt { left: auto; right: 12px }
+.chip-btn[aria-pressed="true"] { background: var(--battle-red); border-color: var(--battle-red) }
 
-/* --- panels ------------------------------------------------------------- */
+/* Band 3 — tabs */
+.tabs {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  background: var(--steel-900);
+  border-bottom: 1px solid var(--line-hairline);
+}
+.tab {
+  min-height: 48px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: none;
+  color: var(--text-muted);
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 13px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.tab[aria-selected="true"] { color: var(--text-strong); border-bottom-color: var(--battle-red) }
 
-.controls { display: flex; flex-direction: column; gap: var(--space-5) }
+/* Band 4 — the one scrolling region */
+.sheet {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: var(--space-4);
+  background: var(--deep-steel);
+}
+.pane { display: flex; flex-direction: column; gap: var(--space-4) }
+.pane[hidden] { display: none }
 
-.panel {
-  border: var(--border-hairline);
-  border-left: var(--border-accent);
-  background: var(--surface-card);
-  padding: var(--space-5);
-  margin: 0;
+/* Band 5 — the action */
+.actions {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  align-items: center;
+  gap: 4px;
+  padding: 10px var(--space-4) calc(10px + env(safe-area-inset-bottom));
+  background: var(--steel-900);
+  border-top: 1px solid var(--line-hairline);
 }
-.panel legend { padding: 0 var(--space-2); margin-left: calc(var(--space-2) * -1); color: var(--battle-red) }
 
-.field { display: flex; flex-direction: column; gap: var(--space-2) }
-.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-4) }
+/* --- controls ------------------------------------------------------------ */
+
+.field { display: flex; flex-direction: column; gap: 6px }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--space-4) }
 
 input[type="text"], select {
   font-family: var(--font-body);
-  font-size: 15px;
+  /* 16px exactly: anything smaller makes iOS Safari zoom the page on focus,
+     and there is no gesture that undoes it. */
+  font-size: 16px;
+  min-height: 44px;
   color: var(--text-strong);
   background: var(--steel-900);
   border: 1px solid var(--line-hairline);
@@ -127,20 +196,17 @@ input[type="text"], select {
   padding: 10px 12px;
   width: 100%;
 }
-input[type="text"]:focus-visible, select:focus-visible { border-color: var(--battle-red) }
 input[type="text"]:focus, select:focus { border-color: var(--battle-red) }
 input[type="text"]::placeholder { color: var(--text-muted) }
 
-input[type="range"] { width: 100%; accent-color: var(--battle-red) }
-
-.row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap }
-
-.seg { display: flex; border: 1px solid var(--line-hairline) }
-.seg label { position: relative; display: block }
+.seg { display: flex; gap: 2px; flex: none }
+.seg label { position: relative; display: flex }
 .seg input { position: absolute; inset: 0; opacity: 0; cursor: pointer }
 .seg span {
-  display: block;
-  padding: 8px 18px;
+  display: flex; align-items: center; justify-content: center;
+  min-height: 46px; min-width: 52px;
+  padding: 0 12px;
+  border: 1px solid var(--line-hairline);
   font-family: var(--font-display);
   font-weight: var(--weight-bold);
   font-size: 12px;
@@ -148,109 +214,52 @@ input[type="range"] { width: 100%; accent-color: var(--battle-red) }
   text-transform: uppercase;
   color: var(--text-muted);
 }
-.seg input:checked + span { background: var(--battle-red); color: var(--liberty-white) }
+.seg input:checked + span { background: var(--battle-red); border-color: var(--battle-red); color: var(--liberty-white) }
+.seg input:disabled + span { opacity: .35 }
 .seg input:focus-visible + span { outline: 2px solid var(--battle-red); outline-offset: 2px }
 
-.check { display: flex; align-items: center; gap: var(--space-3); cursor: pointer }
-.check input { accent-color: var(--battle-red); width: 16px; height: 16px }
-
-/* --- buttons ------------------------------------------------------------ */
-
 .btn {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 12px 20px;
   font-family: var(--font-display);
   font-weight: var(--weight-bold);
-  font-size: 13px;
+  font-size: 14px;
   letter-spacing: .04em;
   text-transform: uppercase;
-  padding: 12px 20px;
   border: 1px solid var(--line-strong);
   background: transparent;
   color: var(--text-strong);
   border-radius: var(--radius-none);
   cursor: pointer;
-  transition: background var(--dur-fast) var(--ease-drive), border-color var(--dur-fast) var(--ease-drive);
 }
-.btn:hover { border-color: var(--battle-red) }
 .btn:active { transform: var(--lift-press) }
 .btn.primary { background: var(--battle-red); border-color: var(--battle-red); color: var(--liberty-white) }
-.btn.primary:hover { background: var(--action-primary-hover) }
-
-/* --- photo source ------------------------------------------------------- */
+.btn.ghost { border-color: var(--line-hairline); color: var(--text-muted); min-height: 44px }
+.btn.wide { width: 100%; max-width: 420px }
+.btn:disabled { opacity: .4; cursor: not-allowed }
 
 .dropzone {
   border: 1px dashed var(--line-strong);
-  padding: var(--space-5);
+  padding: var(--space-4);
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-3);
   text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-3);
-  transition: border-color var(--dur-fast) var(--ease-drive);
 }
 .dropzone.over { border-color: var(--battle-red) }
-.hint { margin: 0; font-size: 13px; color: var(--text-muted) }
 
 .lib-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3) }
 
-.library {
+/* No nested scroller: two-thirds of the week's photos used to sit behind a
+   260px window inside a 2,900px page, reachable only by a gesture
+   indistinguishable from scrolling. The sheet scrolls; the grid does not. */
+.library, .collection {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
-  gap: 6px;
-  max-height: 260px;
-  overflow-y: auto;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 8px;
 }
-.thumb {
-  padding: 0;
-  border: 1px solid var(--line-hairline);
-  background: var(--steel-900);
-  cursor: pointer;
-  aspect-ratio: 3 / 4;
-  overflow: hidden;
-}
-.thumb img { width: 100%; height: 100%; object-fit: cover; display: block }
-.thumb:hover { border-color: var(--line-strong) }
-.thumb.on { border: var(--border-accent) }
-.empty { grid-column: 1 / -1; margin: 0; font-size: 13px; color: var(--text-muted) }
-.empty code { font-family: var(--font-mono); font-size: 12px; color: var(--htown-sky) }
-
-/* --- templates ---------------------------------------------------------- */
-
-.templates { display: flex; flex-direction: column; gap: 1px; background: var(--line-hairline) }
-.tpl {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  text-align: left;
-  padding: var(--space-4);
-  background: var(--steel-900);
-  border: 0;
-  border-left: 3px solid transparent;
-  cursor: pointer;
-  color: inherit;
-}
-.tpl:hover { border-left-color: var(--line-strong) }
-.tpl[aria-pressed="true"] { border-left-color: var(--battle-red); background: var(--steel-800) }
-.tpl-name {
-  font-family: var(--font-display);
-  font-weight: var(--weight-bold);
-  text-transform: uppercase;
-  font-size: 14px;
-  letter-spacing: .02em;
-  color: var(--text-strong);
-}
-.tpl-note { font-size: 13px; color: var(--text-muted); line-height: 1.4 }
-
-/* disabled surface option — desktop has no lock screen */
-.seg label.off span { opacity: .4 }
-.seg input:disabled { cursor: not-allowed }
-.btn:disabled { opacity: .4; cursor: not-allowed }
-.btn:disabled:hover { border-color: var(--line-strong) }
-
-/* --- collection --------------------------------------------------------- */
-
-#collection:empty { display: none }
-.keep {
+.thumb, .keep {
   position: relative;
   padding: 0;
   border: 1px solid var(--line-hairline);
@@ -259,32 +268,105 @@ input[type="range"] { width: 100%; accent-color: var(--battle-red) }
   aspect-ratio: 3 / 4;
   overflow: hidden;
 }
-.keep img { width: 100%; height: 100%; object-fit: cover; display: block }
-.keep:hover { border-color: var(--line-strong) }
+.thumb img, .keep img { width: 100%; height: 100%; object-fit: cover; display: block }
+.thumb.on, .keep.on { border: var(--border-accent) }
+.empty { grid-column: 1 / -1; margin: 0; font-size: 13px; color: var(--text-muted) }
+.empty code { font-family: var(--font-mono); font-size: 12px; color: var(--htown-sky) }
+
+.keep .open { all: unset; display: block; width: 100%; height: 100%; cursor: pointer }
+/* 44x44 hit area for a destructive control that used to be a 22px corner tap
+   inside the primary target, with no confirm and no undo. */
 .keep .drop {
-  position: absolute;
-  top: 0; right: 0;
-  width: 22px; height: 22px;
+  position: absolute; top: 0; right: 0;
+  width: 44px; height: 44px;
+  display: flex; align-items: flex-start; justify-content: flex-end;
+  padding: 4px 6px;
   border: 0;
-  background: var(--battle-red);
+  background: linear-gradient(225deg, rgba(2,17,24,.9) 40%, rgba(2,17,24,0) 75%);
   color: var(--liberty-white);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 22px;
+  font-family: var(--font-mono); font-size: 15px; line-height: 1;
   cursor: pointer;
-  padding: 0;
 }
 .keep .meta {
-  position: absolute;
-  left: 0; right: 0; bottom: 0;
+  position: absolute; left: 0; right: 0; bottom: 0;
   padding: 4px 5px;
-  background: rgba(2,17,24,.82);
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: .1em;
-  text-transform: uppercase;
+  background: rgba(2, 17, 24, .82);
+  font-family: var(--font-mono); font-size: 9px;
+  letter-spacing: .1em; text-transform: uppercase;
   color: var(--text-body);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.templates { display: flex; flex-direction: column; gap: 1px; background: var(--line-hairline) }
+.tpl {
+  display: flex; flex-direction: column; gap: 4px;
+  text-align: left;
+  min-height: 60px;
+  padding: var(--space-4);
+  background: var(--steel-900);
+  border: 0;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  color: inherit;
+}
+.tpl[aria-pressed="true"] { border-left-color: var(--battle-red); background: var(--steel-800) }
+.tpl-name {
+  font-family: var(--font-display); font-weight: var(--weight-bold);
+  text-transform: uppercase; font-size: 15px; letter-spacing: .02em;
+  color: var(--text-strong);
+}
+.tpl-note { font-size: 13px; color: var(--text-muted); line-height: 1.35 }
+
+/* --- device sheet -------------------------------------------------------- */
+
+.sheet-modal {
+  border: 0;
+  border-top: var(--rule-thick) solid var(--battle-red);
+  background: var(--steel-800);
+  color: var(--text-body);
+  width: min(560px, 100%);
+  margin: auto auto 0;
+  padding: var(--space-5) var(--space-4) calc(var(--space-5) + env(safe-area-inset-bottom));
+}
+.sheet-modal::backdrop { background: rgba(2, 17, 24, .7) }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); margin-bottom: var(--space-4) }
+
+/* --- landscape: the one place a two-column layout is right ---------------- */
+
+@media (orientation: landscape) and (max-height: 560px) {
+  .app {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "bar     bar"
+      "preview sheet"
+      "preview actions";
+    max-width: none;
+  }
+  .bar { grid-area: bar }
+  .preview { grid-area: preview }
+  .tabs { grid-area: sheet; align-self: start; position: sticky; top: 0; z-index: 2 }
+  .sheet { grid-area: sheet; padding-top: 56px }
+  .actions { grid-area: actions }
+}
+
+/* --- desktop: give the preview room, keep the sheet beside it ------------- */
+
+@media (min-width: 900px) and (min-height: 640px) {
+  .app {
+    max-width: 1200px;
+    grid-template-columns: minmax(0, 1fr) 420px;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "bar     bar"
+      "preview sheet"
+      "preview actions";
+    gap: 0 var(--space-5);
+    padding-inline: var(--space-5);
+  }
+  .bar { grid-area: bar }
+  .preview { grid-area: preview; padding: var(--space-5) }
+  .tabs { grid-area: sheet; align-self: start; position: sticky; top: 0; z-index: 2 }
+  .sheet { grid-area: sheet; padding-top: 60px }
+  .actions { grid-area: actions; align-items: stretch }
 }

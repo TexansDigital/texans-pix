@@ -15,10 +15,14 @@ import sharp from 'sharp';
 const ROOT = new URL('..', import.meta.url).pathname;
 const PHOTOS = join(ROOT, 'library/photos');
 const THUMBS = join(ROOT, 'library/thumbs');
+const DISPLAY = join(ROOT, 'library/display');
 const MANIFEST = join(ROOT, 'library/manifest.json');
 
 const EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.avif']);
 const THUMB_WIDTH = 400;
+// Tapping a thumbnail used to fetch the full original: 2.4MB, which is 48
+// seconds on a congested stadium connection. This is what the studio loads.
+const DISPLAY_WIDTH = 1600;
 const SOFT_LIMIT = 100;
 
 const titleFrom = name => basename(name, extname(name))
@@ -29,6 +33,7 @@ const titleFrom = name => basename(name, extname(name))
 
 async function main() {
   await mkdir(THUMBS, { recursive: true });
+  await mkdir(DISPLAY, { recursive: true });
 
   let files;
   try {
@@ -60,12 +65,17 @@ async function main() {
         .resize({ width: THUMB_WIDTH, withoutEnlargement: true })
         .jpeg({ quality: 78, progressive: true })
         .toFile(join(THUMBS, thumbName));
+      await sharp(src).rotate()
+        .resize({ width: DISPLAY_WIDTH, withoutEnlargement: true })
+        .jpeg({ quality: 82, progressive: true, mozjpeg: true })
+        .toFile(join(DISPLAY, thumbName));
 
       const { size } = await stat(src);
       photos.push({
         id: basename(file, extname(file)),
         file: `library/photos/${file}`,
         thumb: `library/thumbs/${thumbName}`,
+        display: `library/display/${thumbName}`,
         title: titleFrom(file),
         width: meta.width ?? null,
         height: meta.height ?? null,

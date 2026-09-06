@@ -7,6 +7,9 @@
 //   - square corners; red is emphasis, never a large field except the ticker
 //   - no sponsor mark is ever baked into the file (see README)
 //
+// Sizes are pure fractions of W and H with no absolute floors, so the preview
+// surface and the export surface render identically at any scale.
+//
 // Every template measures its type first, then lays a scrim sized to where
 // that type actually landed, then draws. A scrim anchored to a fixed fraction
 // of height inverts on a landscape plate — display size scales with width —
@@ -73,9 +76,9 @@ export const TEMPLATES = [
     note: 'Bottom scrim, heavy display line, red rule. The default.',
     draw(ctx, { W, H, device, surface, fields, marks, sample }) {
       const f = frame(W, H, device, surface);
-      const stampSize = Math.max(16, W * 0.026);
+      const stampSize = W * 0.026;
       const kicker = join(fields.kicker, labeled('SEC', fields.section));
-      const ruleH = Math.max(4, Math.round(H * 0.0055));
+      const ruleH = Math.max(1, H * 0.0055);
 
       // Measure.
       let y = f.bottom;
@@ -105,7 +108,7 @@ export const TEMPLATES = [
     note: 'Mono data block only. Keeps the frame clear — best for lock screens.',
     draw(ctx, { W, H, device, surface, fields, sample }) {
       const f = frame(W, H, device, surface);
-      const size = Math.max(18, W * 0.030);
+      const size = W * 0.030;
       const lines = [
         join(fields.kicker),
         join(fields.name, labeled('NO', fields.number)),
@@ -123,7 +126,7 @@ export const TEMPLATES = [
         monoStamp(ctx, lines[i], f.left, y, size, 'rgba(255,255,255,.94)', 'left', f.width);
         y -= size * 2.1;
       }
-      rule(ctx, f.left, ruleY, Math.round(W * 0.10), Math.max(3, Math.round(H * 0.004)));
+      rule(ctx, f.left, ruleY, Math.round(W * 0.10), Math.max(1, H * 0.004));
     },
   },
 
@@ -145,7 +148,7 @@ export const TEMPLATES = [
       }
       scrimFlat(ctx, W, H, { tone: TONE.red, floor: 0.5, sample });
 
-      const stampSize = Math.max(16, W * 0.026);
+      const stampSize = W * 0.026;
       let y = f.bottom;
       const foot = join(labeled('SECTION', fields.section), labeled('SINCE', fields.since));
       if (has(foot)) {
@@ -172,7 +175,7 @@ export const TEMPLATES = [
       const f = frame(W, H, device, surface);
       const stripH = Math.round(H * 0.028);
       const stripTop = tickerTop(H, f, device, surface, stripH);
-      const stampSize = Math.max(16, W * 0.026);
+      const stampSize = W * 0.026;
       const kicker = join(fields.kicker, labeled('SEC', fields.section), labeled('SINCE', fields.since));
 
       let y = stripTop - stripH * 0.6;
@@ -201,7 +204,7 @@ export const TEMPLATES = [
     draw(ctx, { W, H, device, surface, fields, marks, sample }) {
       const f = frame(W, H, device, surface);
       const number = val(fields.number).toUpperCase().slice(0, 2);
-      const stampSize = Math.max(16, W * 0.026);
+      const stampSize = W * 0.026;
       const foot = join(fields.kicker, labeled('SEC', fields.section));
 
       let y = f.bottom;
@@ -245,7 +248,7 @@ export const TEMPLATES = [
         ctx.fillText(number, f.left, numY);
         ctx.restore();
       } else {
-        rule(ctx, f.left, y, Math.round(W * 0.16), Math.max(4, Math.round(H * 0.0055)));
+        rule(ctx, f.left, y, Math.round(W * 0.16), Math.max(1, H * 0.0055));
         const badgeSize = W * 0.12;
         drawBadge(ctx, badgeMark(marks, sample, H, f.top, badgeSize), f.left, f.top, badgeSize);
       }

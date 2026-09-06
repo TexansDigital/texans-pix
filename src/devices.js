@@ -16,6 +16,7 @@ export const DEVICES = [
   { id: 'ip-16-pro',     group: 'iPhone', label: '16 Pro',                  w: 1206, h: 2622, lock: IOS_LOCK, home: IOS_HOME },
   { id: 'ip-plus',       group: 'iPhone', label: '14/15/16 Plus & Pro Max', w: 1290, h: 2796, lock: IOS_LOCK, home: IOS_HOME },
   { id: 'ip-std',        group: 'iPhone', label: '14 Pro / 15 / 16',        w: 1179, h: 2556, lock: IOS_LOCK, home: IOS_HOME },
+  { id: 'ip-13',         group: 'iPhone', label: '12 / 13 / 14',             w: 1170, h: 2532, lock: IOS_LOCK, home: IOS_HOME },
   { id: 'ip-xr',         group: 'iPhone', label: 'XR / 11',                 w:  828, h: 1792, lock: IOS_LOCK, home: IOS_HOME },
   { id: 'ip-se',         group: 'iPhone', label: 'SE (3rd gen)',            w:  750, h: 1334, lock: IOS_LOCK, home: IOS_HOME },
 
@@ -25,6 +26,7 @@ export const DEVICES = [
   { id: 'px-9',     group: 'Android', label: 'Pixel 9',              w: 1080, h: 2424, lock: AND_LOCK, home: AND_HOME },
   { id: 'px-9-xl',  group: 'Android', label: 'Pixel 9 Pro XL',       w: 1344, h: 2992, lock: AND_LOCK, home: AND_HOME },
   { id: 'and-gen',  group: 'Android', label: 'Common 1080 x 2400',   w: 1080, h: 2400, lock: AND_LOCK, home: AND_HOME },
+  { id: 'and-185',  group: 'Android', label: 'Common 1080 x 2220',   w: 1080, h: 2220, lock: AND_LOCK, home: AND_HOME },
 
   // --- Other --------------------------------------------------------------
   { id: 'story',   group: 'Other', label: 'Social story 9:16', w: 1080, h: 1920, lock: AND_LOCK, home: AND_HOME },
@@ -46,4 +48,30 @@ export function typeBand(device, surface) {
   }
   const home = device.home || { statusBottom: 0.05, dockTop: 0.86 };
   return { top: home.statusBottom + 0.02, bottom: home.dockTop - 0.02 };
+}
+
+// A fan should not have to know their own screen resolution. Rounding
+// screen.width x devicePixelRatio identifies the handset for most devices;
+// where it does not match exactly, the nearest preset by aspect and area is
+// close enough that the export still fits.
+export function detectDevice() {
+  if (typeof window === 'undefined' || !window.screen) return null;
+  const dpr = window.devicePixelRatio || 1;
+  const w = Math.round(Math.min(screen.width, screen.height) * dpr);
+  const h = Math.round(Math.max(screen.width, screen.height) * dpr);
+  if (!w || !h) return null;
+
+  const exact = DEVICES.find(d => d.w === w && d.h === h);
+  if (exact) return { device: exact, exact: true, reported: [w, h] };
+
+  // Score on aspect first, then on how far off the pixel count is.
+  const ratio = h / w;
+  let best = null;
+  let bestScore = Infinity;
+  for (const d of DEVICES) {
+    if (d.id === 'desktop' || d.group === 'Other') continue;
+    const score = Math.abs(d.h / d.w - ratio) * 40 + Math.abs(d.w - w) / 1000;
+    if (score < bestScore) { bestScore = score; best = d; }
+  }
+  return best ? { device: best, exact: false, reported: [w, h] } : null;
 }
