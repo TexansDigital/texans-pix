@@ -370,3 +370,43 @@ input[type="text"]::placeholder { color: var(--text-muted) }
   .sheet { grid-area: sheet; padding-top: 60px }
   .actions { grid-area: actions; align-items: stretch }
 }
+
+/* --- first run ----------------------------------------------------------- */
+/* Before a photo exists there is one job. Everything else is noise, so it is
+   not on screen: no tabs, no sheet, no device, no surface toggle, no chips,
+   no download. */
+
+.start {
+  position: absolute;
+  inset: 0;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  text-align: center;
+  background: var(--deep-steel);
+}
+#app:not(.has-photo) .start { display: flex }
+#app:not(.has-photo) .tabs,
+#app:not(.has-photo) .sheet,
+#app:not(.has-photo) .actions,
+#app:not(.has-photo) .chip-btn,
+#app:not(.has-photo) .seg,
+#app:not(.has-photo) .device-btn { display: none }
+#app:not(.has-photo) { grid-template-rows: auto minmax(0, 1fr) }
+
+.start-kicker { color: var(--battle-red) }
+.start-head {
+  font-family: var(--font-display);
+  font-weight: var(--weight-black);
+  text-transform: uppercase;
+  font-size: clamp(30px, 9vw, 46px);
+  line-height: .88;
+  letter-spacing: var(--tracking-display);
+  color: var(--text-strong);
+  margin: 0 0 var(--space-3);
+}
+.start .btn { width: 100%; max-width: 320px }
+.start .hint { max-width: 34ch; margin-top: var(--space-3) }

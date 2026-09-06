@@ -10,7 +10,7 @@
 </head>
 <body>
 
-<div class="app">
+<div class="app" id="app">
 
   <!-- Band 1: identity and live status. Deliberately small; a masthead was
        taking a fifth of an iPhone SE. -->
@@ -31,6 +31,14 @@
   <!-- Band 2: the preview never leaves the screen. -->
   <section class="preview" aria-label="Wallpaper preview">
     <canvas id="stage" width="390" height="844" aria-label="Wallpaper preview"></canvas>
+
+    <div id="start" class="start">
+      <p class="start-kicker stamp">Step one</p>
+      <h1 class="start-head">Start with<br>a photo</h1>
+      <button id="start-pick" class="btn primary wide" type="button">Choose from my phone</button>
+      <button id="start-lib" class="btn wide" type="button">Use a Texans photo</button>
+      <p class="hint tiny">Your own photo is composited here on your phone. It never leaves your device.</p>
+    </div>
     <button id="guides-btn" type="button" class="chip-btn" aria-pressed="false"
             title="Show clock and widget zones">Zones</button>
     <button id="reset-btn" type="button" class="chip-btn alt" title="Reset framing">Reset</button>

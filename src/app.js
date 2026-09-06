@@ -124,6 +124,7 @@ async function useSource(source, label, libraryId = null) {
     state.sourceHeight = sourceHeight;
     resetFraming();
     $('#export').disabled = false;
+    $('#app').classList.add('has-photo');
 
     const upscale = state.device.w / bitmap.width;
     if (upscale > 1.6) setStatus(`${label} — small for this screen, it will look soft`, true);
@@ -366,6 +367,13 @@ function wireFileInput() {
     input.value = '';
   });
   $('#pick').addEventListener('click', () => input.click());
+  $('#start-pick').addEventListener('click', () => input.click());
+  $('#start-lib').addEventListener('click', () => {
+    // Reveal the app on the Photo tab with the library in view.
+    $('#app').classList.add('has-photo', 'browsing');
+    document.querySelector('.tab[data-tab="photo"]').click();
+    $('#library').scrollIntoView({ block: 'nearest' });
+  });
 
   const drop = $('#dropzone');
   ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => {

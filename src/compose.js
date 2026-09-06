@@ -298,11 +298,14 @@ export function layoutDisplay(ctx, text, { size, maxWidth, maxHeight = Infinity,
   let lines = [];
   for (;;) {
     ctx.font = `${weight} ${fontSize}px ${BRAND.display}`;
-    lines = wrap(ctx, words, maxWidth);
+    const attempt = wrap(ctx, words, maxWidth);
+    lines = attempt.lines;
     const height = (lines.length - 1) * fontSize * lineHeight + fontSize;
-    if (lines.length <= maxLines && height <= maxHeight) break;
+    // A mid-word break is a last resort, never an outcome the loop accepts
+    // while there is still room to shrink.
+    if (lines.length <= maxLines && height <= maxHeight && !attempt.broke) break;
     if (fontSize <= minSize) { lines = lines.slice(0, maxLines); break; }
-    fontSize = Math.max(minSize, fontSize - Math.max(1, size * 0.04));
+    fontSize = Math.max(minSize, fontSize - Math.max(1, size * 0.03));
   }
   ctx.font = `${weight} ${fontSize}px ${BRAND.display}`;
   const height = (lines.length - 1) * fontSize * lineHeight + fontSize;
@@ -322,15 +325,19 @@ export function drawDisplay(ctx, layout, { x, y, color = BRAND.white, align = 'l
   return layout.height;
 }
 
-// Greedy wrap. A word wider than the measure is hard-broken at the character
-// level, because a surname with no spaces used to run straight off the plate.
+// Greedy wrap. Reports whether it had to break a word mid-glyph, so the caller
+// can shrink instead: HOUSTON needed a 4% size reduction to fit the measure and
+// was being split into HOUSTO / N, which then satisfied the line count and
+// stopped the shrink loop from ever running.
 function wrap(ctx, words, maxWidth) {
   const lines = [];
   let line = '';
+  let broke = false;
   const push = () => { if (line) { lines.push(line); line = ''; } };
 
   for (const word of words) {
     if (ctx.measureText(word).width > maxWidth) {
+      broke = true;
       push();
       let chunk = '';
       for (const ch of word) {
@@ -349,7 +356,7 @@ function wrap(ctx, words, maxWidth) {
     else line = candidate;
   }
   push();
-  return lines;
+  return { lines, broke };
 }
 
 // The brand's bottom ticker strip: repeating wordmark and star on battle red.
