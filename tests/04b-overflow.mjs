@@ -1,94 +1,126 @@
-import { launch, feed } from './lib.mjs';
+// P1-1: hard-break threshold sweep. For every template x every device x both
+// surfaces, walk each personalisation field from 1 char to its maxlength with
+// worst-case glyphs and record the first length at which ink passes the safe
+// margin or leaves the canvas. The whole sweep runs inside one page.evaluate
+// because it is ~200k renders and a round trip per render takes an hour.
+import { launch, feed, INK_RECORDER, isMono } from './lib.mjs';
 
 const { browser, page } = await launch();
-await page.waitForTimeout(1200);
 await feed(page, new URL('./out/exif0-landscape.jpg', import.meta.url).pathname, 'exif0-landscape.jpg');
+await page.evaluate(INK_RECORDER);
 
-await page.evaluate(() => {
-  const P = CanvasRenderingContext2D.prototype, orig = P.fillText;
-  window.__ink = []; window.__recording = false;
-  P.fillText = function (t, x, y, ...r) {
-    if (window.__recording) {
-      const m = this.measureText(t);
-      let left = x - m.actualBoundingBoxLeft, right = x + m.actualBoundingBoxRight;
-      if (this.textAlign === 'center') { left = x - m.width / 2; right = x + m.width / 2; }
-      window.__ink.push({ text: String(t), x0: left, x1: right, y0: y - m.actualBoundingBoxAscent, y1: y + m.actualBoundingBoxDescent, font: this.font });
-    }
-    return orig.apply(this, [t, x, y, ...r]);
+const sweep = await page.evaluate(() => {
+  const S = window.__studio;
+  const MAX = { headline: 28, name: 24, number: 2, section: 6, since: 4, kicker: 24 };
+  const TEMPLATES = ['battle', 'stamp', 'deep-steel', 'ticker', 'jersey'];
+  const devices = [...document.querySelectorAll('#device option')].map(o => o.value);
+  const isMono = f => /Azeret|monospace|Menlo/.test(f);
+  const c = document.querySelector('#stage');
+
+  const shot = (dev, surface, tpl, fields) => {
+    S.setDevice(dev); S.setSurface(surface); S.setTemplate(tpl);
+    S.setFields({ headline: '', name: '', number: '', section: '', since: '', kicker: '', ...fields });
+    window.__ink = []; window.__recording = true; S.render(false); window.__recording = false;
+    const d = S.state.device, eff = S.effectiveSurface();
+    const stripH = Math.round(c.height * 0.028);
+    const lockZ = eff === 'lock' ? d.lock : null;
+    const stripTop = lockZ ? Math.round(c.height * (lockZ.controlsTop - 0.03)) : c.height - stripH;
+    const ink = window.__ink.filter(i => i.text.trim() &&
+      !(tpl === 'ticker' && i.y0 >= stripTop - 2 && i.y1 <= stripTop + stripH + 2));
+    return { W: c.width, H: c.height, margin: Math.round(c.width * 0.062), ink, eff };
   };
+
+  const rows = [];
+  for (const tpl of TEMPLATES) {
+    for (const field of Object.keys(MAX)) {
+      for (const glyph of ['M', 'W']) {
+        let pastMargin = null, offCanvas = null, worst = null, worstOver = -1e9, usesField = false;
+        for (const dev of devices) {
+          for (const surface of ['lock', 'home']) {
+            for (let n = 1; n <= MAX[field]; n++) {
+              const r = shot(dev, surface, tpl, { [field]: glyph.repeat(n) });
+              if (!r.ink.length) continue;
+              usesField = usesField || r.ink.some(i => i.text.includes(glyph));
+              const maxX = Math.max(...r.ink.map(i => i.x1));
+              const minX = Math.min(...r.ink.map(i => i.x0));
+              const maxY = Math.max(...r.ink.map(i => i.y1));
+              const minY = Math.min(...r.ink.map(i => i.y0));
+              // 12px of left tolerance: an 'A' or 'W' at 250px carries real
+              // negative side bearing that is not an overflow.
+              if (!pastMargin && (maxX > r.W - r.margin + 2 || minX < r.margin - 12)) pastMargin = `${n}@${dev}/${r.eff}`;
+              if (!offCanvas && (maxX > r.W + 0.5 || minX < -0.5 || maxY > r.H + 0.5 || minY < -0.5)) {
+                offCanvas = `${n}@${dev}/${r.eff}`;
+              }
+              const over = Math.max(maxX - (r.W - r.margin), maxY - r.H, -minY);
+              if (over > worstOver) { worstOver = over; worst = `${dev}/${r.eff} n=${n} x=[${minX.toFixed(0)},${maxX.toFixed(0)}] y=[${minY.toFixed(0)},${maxY.toFixed(0)}] canvas=${r.W}x${r.H} marginLimit=${r.W - r.margin}`; }
+            }
+          }
+        }
+        rows.push({ tpl, field, glyph, usesField, pastMargin, offCanvas, worst });
+      }
+    }
+  }
+  return rows;
 });
 
-const shot = (dev, surface, tpl, fields) => page.evaluate(async ({ dev, surface, tpl, fields }) => {
-  const S = window.__studio;
-  S.setDevice(dev); S.setSurface(surface); S.setTemplate(tpl); S.setFields(fields);
-  window.__ink = []; window.__recording = true; S.render(false); window.__recording = false;
-  const c = document.querySelector('#stage');
-  const strip = c.height - Math.round(c.height * 0.028) - 2;
-  const ink = window.__ink.filter(i => i.text.trim() && !(tpl === 'ticker' && i.y0 >= strip));
-  return { W: c.width, H: c.height, margin: Math.round(c.width * 0.062), ink };
-}, { dev, surface, tpl, fields });
-
-console.log('=== 1. Shortest unbroken name that escapes the frame / canvas (lock, ip-16-pro-max) ===');
-for (const tpl of ['battle', 'stamp', 'deep-steel', 'ticker', 'jersey']) {
-  let firstFrame = null, firstCanvas = null;
-  for (let n = 6; n <= 24; n++) {
-    const name = 'M'.repeat(n);
-    const r = await shot('ip-16-pro-max', 'lock', tpl, { headline: '', name, number: '', section: '', since: '', kicker: '' });
-    const worst = r.ink.reduce((a, i) => Math.max(a, i.x1), 0);
-    const minx = r.ink.reduce((a, i) => Math.min(a, i.x0), 1e9);
-    if (!firstFrame && (worst > r.W - r.margin + 2 || minx < r.margin - 6)) firstFrame = { n, worst: worst.toFixed(0), minx: minx.toFixed(0), limit: r.W - r.margin };
-    if (!firstCanvas && (worst > r.W + 1 || minx < -1)) firstCanvas = { n, worst: worst.toFixed(0), minx: minx.toFixed(0), W: r.W };
-  }
-  console.log(` ${tpl.padEnd(11)} escapes safe margin at n=${firstFrame ? JSON.stringify(firstFrame) : 'never'}   escapes CANVAS at n=${firstCanvas ? JSON.stringify(firstCanvas) : 'never'}`);
+console.log('=== 1. Worst-case unbroken run per field, 1..maxlength, all templates x devices x surfaces ===');
+for (const r of sweep) {
+  if (!r.usesField) continue;
+  const flag = r.offCanvas ? '   <<< LEAVES CANVAS' : '';
+  console.log(` ${r.tpl.padEnd(11)} ${r.field.padEnd(9)} '${r.glyph}'  past-margin@${String(r.pastMargin || '-').padEnd(24)} off-canvas@${String(r.offCanvas || '-').padEnd(24)}${flag}`);
+  if (r.offCanvas) console.log(`     worst: ${r.worst}`);
 }
+const leaks = sweep.filter(r => r.usesField && r.offCanvas);
+console.log('\nfield/template combinations that can leave the canvas within maxlength:',
+  leaks.length ? leaks.map(r => `${r.tpl}.${r.field}('${r.glyph}')`).join(', ') : 'NONE');
 
-console.log('\n=== 2. Real-word check: a long single surname ===');
-for (const name of ['VANDERPLOEG', 'SCHWARZENEGGER', 'PAPADOPOULOS-JONES', 'HOUSTONTEXANSFAN']) {
-  const r = await shot('ip-16-pro-max', 'lock', 'battle', { headline: '', name, number: '', section: '', since: '', kicker: '' });
-  const worst = Math.max(...r.ink.map(i => i.x1));
-  console.log(` ${name.padEnd(20)} len=${String(name.length).padEnd(2)} maxX=${worst.toFixed(0)} frameRight=${r.W - r.margin} canvasW=${r.W} ${worst > r.W ? 'OFF-CANVAS' : worst > r.W - r.margin ? 'past margin' : 'ok'}`);
-}
+// --- R4 repro + character-integrity check ------------------------------------
+const detail = await page.evaluate(() => {
+  const S = window.__studio, c = document.querySelector('#stage');
+  const isMono = f => /Azeret|monospace|Menlo/.test(f);
+  const shot = (dev, surface, tpl, fields) => {
+    S.setDevice(dev); S.setSurface(surface); S.setTemplate(tpl);
+    S.setFields({ headline: '', name: '', number: '', section: '', since: '', kicker: '', ...fields });
+    window.__ink = []; window.__recording = true; S.render(false); window.__recording = false;
+    return { W: c.width, margin: Math.round(c.width * 0.062), ink: window.__ink.filter(i => i.text.trim()) };
+  };
+  const out = { names: [], integrity: [] };
+  for (const name of ['VANDERPLOEG', 'SCHWARZENEGGER', 'PAPADOPOULOS-JONES', 'HOUSTONTEXANSFAN', 'MMMMMMMMMMMMMMMMMMMMMMMM'])
+    for (const tpl of ['battle', 'ticker', 'jersey'])
+      for (const dev of ['ip-16-pro-max', 'ip-se']) {
+        const r = shot(dev, 'lock', tpl, { name });
+        const d = r.ink.filter(i => !isMono(i.font));
+        out.names.push({ tpl, dev, name, lines: d.map(i => i.text), maxX: +Math.max(...d.map(i => i.x1)).toFixed(0), W: r.W, margin: r.margin });
+      }
+  for (const tpl of ['battle', 'stamp', 'deep-steel', 'ticker', 'jersey'])
+    for (const [field, text] of [['name', 'PAPADOPOULOS-JONES'], ['headline', 'MMMMMMMMMMMMMMMMMMMMMMMMMMMM'], ['headline', 'ALPHA BRAVO CHARLIE DELTA EC'], ['kicker', 'WWWWWWWWWWWWWWWWWWWWWWWW']])
+      for (const dev of ['ip-se', 'ip-16-pro-max']) {
+        const r = shot(dev, 'lock', tpl, { [field]: text });
+        const monoOut = r.ink.filter(i => isMono(i.font)).map(i => i.text).join('');
+        const dispOut = r.ink.filter(i => !isMono(i.font)).map(i => i.text).join('');
+        out.integrity.push({ tpl, dev, field, text, dispOut, monoOut });
+      }
+  return out;
+});
 
-console.log('\n=== 3. Mono stamp overflow (max personalisation) on every device, narrowest first ===');
-const devs = await page.evaluate(() => [...document.querySelectorAll('#device option')].map(o => o.value));
-const fields = { headline: 'Houston', name: 'Marcus', number: '88', section: 'CLUBAB', since: '2002', kicker: 'PRESEASON WEEK 01 XXXXXX' };
-for (const tpl of ['battle', 'stamp', 'ticker', 'jersey', 'deep-steel']) {
-  const bad = [];
-  for (const d of devs) {
-    const r = await shot(d, 'lock', tpl, fields);
-    const mono = r.ink.filter(i => /Azeret|monospace/.test(i.font));
-    if (!mono.length) continue;
-    const worst = Math.max(...mono.map(i => i.x1));
-    if (worst > r.W - r.margin + 2) bad.push(`${d}: maxX=${worst.toFixed(0)} limit=${r.W - r.margin} canvas=${r.W}${worst > r.W ? ' OFF-CANVAS' : ''}`);
-  }
-  console.log(` ${tpl}: ${bad.length ? bad.join(' | ') : 'no mono overflow'}`);
-}
-
-console.log('\n=== 4. Orphan separators / stray punctuation with sparse fields ===');
-const probes = [
-  ['all empty', { headline: '', name: '', number: '', section: '', since: '', kicker: '' }],
-  ['only spaces', { headline: '   ', name: '  ', number: ' ', section: '   ', since: ' ', kicker: '   ' }],
-  ['section only', { headline: '', name: '', number: '', section: '132', since: '', kicker: '' }],
-  ['since only', { headline: '', name: '', number: '', section: '', since: '2002', kicker: '' }],
-  ['number only', { headline: '', name: '', number: '04', section: '', since: '', kicker: '' }],
-];
-for (const tpl of ['battle', 'stamp', 'deep-steel', 'ticker', 'jersey']) {
-  for (const [label, f] of probes) {
-    const r = await shot('ip-16-pro-max', 'lock', tpl, f);
-    const strings = r.ink.filter(i => /Azeret|monospace/.test(i.font)).map(i => i.text).join('');
-    const display = r.ink.filter(i => !/Azeret|monospace/.test(i.font)).map(i => i.text).join(' | ');
-    const flag = /(^|\s)\/\/\s*$|^\s*\/\/|\/\/\s*\/\//.test(strings) ? '  <-- ORPHAN' : '';
-    console.log(` ${tpl.padEnd(11)} ${label.padEnd(13)} mono="${strings}" display="${display}"${flag}`);
-  }
+console.log('\n=== 2. R4 repro: long single-token names ===');
+for (const n of detail.names) {
+  const v = n.maxX > n.W ? 'OFF-CANVAS' : n.maxX > n.W - n.margin ? 'past margin' : 'ok';
+  console.log(` ${n.tpl.padEnd(11)} ${n.dev.padEnd(14)} "${n.name}" -> ${JSON.stringify(n.lines)} maxX=${n.maxX}/${n.W} ${v}`);
 }
 
-console.log('\n=== 5. Uppercase rule: letters in the Number field ===');
-{
-  const r = await shot('ip-16-pro-max', 'lock', 'jersey', { headline: '', name: 'bo', number: 'ab', section: '', since: '', kicker: '' });
-  console.log(' ink drawn:', JSON.stringify(r.ink.map(i => i.text)));
+console.log('\n=== 3. Hard break / shrink must not delete characters ===');
+let lost = 0;
+for (const i of detail.integrity) {
+  const want = i.text.toUpperCase().replace(/[^A-Z0-9-]/g, '');
+  const gotDisp = i.dispOut.replace(/[^A-Z0-9-]/g, '');
+  const gotMono = i.monoOut.replace(/[^A-Z0-9-]/g, '');
+  const used = gotDisp.includes(want[0]) ? 'display' : gotMono.includes(want[0]) ? 'mono' : null;
+  if (!used) { console.log(` ${i.tpl.padEnd(11)} ${i.dev.padEnd(14)} ${i.field.padEnd(9)} (field unused by this template)`); continue; }
+  const got = used === 'display' ? gotDisp : gotMono;
+  const ok = got.includes(want);
+  if (!ok) lost++;
+  console.log(` ${i.tpl.padEnd(11)} ${i.dev.padEnd(14)} ${i.field.padEnd(9)} "${i.text.slice(0, 18)}" via ${used}: ${ok ? 'all chars kept' : `LOST -> "${got}"`}`);
 }
-{
-  const r = await shot('ip-16-pro-max', 'lock', 'jersey', { headline: '', name: '', number: '00', section: '', since: '', kicker: '' });
-  console.log(' number "00":', JSON.stringify(r.ink.map(i => ({ t: i.text, x0: +i.x0.toFixed(0), x1: +i.x1.toFixed(0), y0: +i.y0.toFixed(0), y1: +i.y1.toFixed(0) }))));
-}
+console.log('\ncases where characters were silently dropped:', lost);
 await browser.close();
