@@ -74,7 +74,10 @@ for (const dev of devices) {
         // merge per-glyph mono runs into logical runs (same font+row) for readable output
         for (const ink of r.ink) {
           if (!ink.text.trim()) continue;
-          const isTicker = /HOUSTON TEXANS/.test(ink.text) && ink.font.includes('Azeret') === false ? false : false;
+          // The Ticker template's bottom strip is deliberately edge-to-edge and
+          // full-bleed; exclude its own glyphs so real violations are visible.
+          const stripTop = r.H - Math.round(r.H * 0.028) - 2;
+          if (tpl === 'ticker' && ink.y0 >= stripTop) continue;
           const tag = `${dev}/${surface}/${tpl}/${c.name}`;
           const push = (kind, detail) => findings.push({ tag, kind, text: ink.text.slice(0, 24), detail });
           if (ink.y0 < bandTop - 1) push('above-safe-band', `y0=${ink.y0.toFixed(0)} < bandTop=${bandTop.toFixed(0)}`);
