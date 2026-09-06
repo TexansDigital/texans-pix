@@ -22,9 +22,10 @@
         <span id="dims">&mdash;</span><span class="edit">change</span>
       </button>
     </div>
-    <div class="seg" role="radiogroup" aria-label="Screen">
+    <div class="seg" role="radiogroup" aria-label="What you are making">
       <label><input type="radio" name="surface" value="lock" checked><span>Lock</span></label>
       <label><input type="radio" name="surface" value="home"><span>Home</span></label>
+      <label><input type="radio" name="surface" value="share"><span>Share</span></label>
     </div>
   </header>
 
@@ -74,21 +75,25 @@
 
     <section class="pane" data-pane="words" role="tabpanel" hidden>
       <div class="grid2">
-        <label class="field"><span class="stamp">Headline</span>
-          <input data-field="headline" type="text" maxlength="28" placeholder="Houston"></label>
+        <label class="field"><span class="stamp">Section</span>
+          <input data-field="section" type="text" maxlength="6" placeholder="132"></label>
+        <label class="field"><span class="stamp">Row</span>
+          <input data-field="row" type="text" maxlength="4" placeholder="J"></label>
+        <label class="field"><span class="stamp">Seat</span>
+          <input data-field="seat" type="text" maxlength="4" placeholder="12"></label>
         <label class="field"><span class="stamp">Name</span>
           <input data-field="name" type="text" maxlength="24" placeholder="Your name"></label>
       </div>
       <button id="more-fields" class="btn ghost" type="button" aria-expanded="false">More details</button>
       <div class="grid2" id="extra-fields" hidden>
+        <label class="field"><span class="stamp">Headline</span>
+          <input data-field="headline" type="text" maxlength="28" placeholder="Houston"></label>
         <label class="field"><span class="stamp">Number</span>
           <input data-field="number" type="text" inputmode="numeric" maxlength="2" placeholder="04"></label>
-        <label class="field"><span class="stamp">Section</span>
-          <input data-field="section" type="text" maxlength="6" placeholder="132"></label>
         <label class="field"><span class="stamp">Since</span>
           <input data-field="since" type="text" inputmode="numeric" maxlength="4" placeholder="2002"></label>
         <label class="field"><span class="stamp">Kicker</span>
-          <input data-field="kicker" type="text" maxlength="24" placeholder="Week 01"></label>
+          <input data-field="kicker" type="text" maxlength="24" placeholder="Week 04"></label>
       </div>
     </section>
 
@@ -102,7 +107,10 @@
 
   <!-- Band 5: the action, always reachable, clear of the home indicator. -->
   <div class="actions">
-    <button id="export" class="btn primary wide" type="button">Download wallpaper</button>
+    <div class="action-row">
+      <button id="share" class="btn primary wide" type="button" hidden>Send to a friend</button>
+      <button id="export" class="btn primary wide" type="button">Download wallpaper</button>
+    </div>
     <p class="hint tiny">Free. No sign-in, no email.</p>
   </div>
 

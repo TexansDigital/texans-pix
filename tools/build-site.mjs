@@ -12,6 +12,8 @@ await rm(SITE, { recursive: true, force: true });
 await mkdir(SITE, { recursive: true });
 
 await cp(join(ROOT, 'index.html'), join(SITE, 'index.html'));
+// This week's game. The studio reads it at runtime, so it ships with the site.
+await cp(join(ROOT, 'gameday.json'), join(SITE, 'gameday.json'));
 for (const dir of ['src', 'assets', 'library']) {
   await cp(join(ROOT, dir), join(SITE, dir), { recursive: true });
 }

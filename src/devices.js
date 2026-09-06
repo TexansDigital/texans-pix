@@ -28,8 +28,12 @@ export const DEVICES = [
   { id: 'and-gen',  group: 'Android', label: 'Common 1080 x 2400',   w: 1080, h: 2400, lock: AND_LOCK, home: AND_HOME },
   { id: 'and-185',  group: 'Android', label: 'Common 1080 x 2220',   w: 1080, h: 2220, lock: AND_LOCK, home: AND_HOME },
 
+  // --- Share -------------------------------------------------------------
+  // Not wallpapers: these are made to send. No lock or home zones apply.
+  { id: 'share-square', group: 'Share', label: 'Square post 1:1', w: 1080, h: 1080, lock: null, home: null, share: true },
+  { id: 'share-story',  group: 'Share', label: 'Story 9:16',      w: 1080, h: 1920, lock: null, home: null, share: true },
+
   // --- Other --------------------------------------------------------------
-  { id: 'story',   group: 'Other', label: 'Social story 9:16', w: 1080, h: 1920, lock: AND_LOCK, home: AND_HOME },
   { id: 'ipad',    group: 'Other', label: 'iPad Pro 11"',      w: 1668, h: 2388, lock: IOS_LOCK, home: IOS_HOME },
   { id: 'desktop', group: 'Other', label: 'Desktop 2560 x 1440', w: 2560, h: 1440, lock: null, home: { statusBottom: 0, dockTop: 1 } },
 ];
@@ -69,9 +73,15 @@ export function detectDevice() {
   let best = null;
   let bestScore = Infinity;
   for (const d of DEVICES) {
-    if (d.id === 'desktop' || d.group === 'Other') continue;
+    if (d.group === 'Other' || d.group === 'Share') continue;
     const score = Math.abs(d.h / d.w - ratio) * 40 + Math.abs(d.w - w) / 1000;
     if (score < bestScore) { bestScore = score; best = d; }
   }
   return best ? { device: best, exact: false, reported: [w, h] } : null;
 }
+
+// A share card has no OS furniture to dodge, so the safe band is a plain
+// margin rather than a clock and a dock.
+export const SHARE_SQUARE = 'share-square';
+export const SHARE_STORY = 'share-story';
+export const isShare = device => Boolean(device?.share);

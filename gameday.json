@@ -1,0 +1,12 @@
+{
+  "$comment": "This week's game. The digital team edits this file; everything gameday-themed in the studio reads from it. Ships with the site, so a change is one commit and one deploy.",
+  "week": "Week 04",
+  "opponentShort": "COLTS",
+  "opponent": "Indianapolis Colts",
+  "home": true,
+  "venue": "NRG Stadium",
+  "kickoff": "2026-09-27T17:00:00-05:00",
+  "theme": "Battle Red Day",
+  "hashtag": "#WeAreTexans",
+  "attendanceCode": "TXNS-W04"
+}

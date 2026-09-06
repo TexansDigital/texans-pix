@@ -1,9 +1,10 @@
-import { DEVICES, DEVICE_GROUPS, getDevice, detectDevice } from './devices.js';
+import { DEVICES, DEVICE_GROUPS, getDevice, detectDevice, SHARE_SQUARE } from './devices.js';
 import { TEMPLATES, getTemplate } from './templates.js';
 import {
   loadFonts, decodeImage, coverRect, coverSlack, makeSampler, clamp, drawGuides, ImageError,
 } from './compose.js';
 import { saveItem, listItems, removeItem, thumbFor, storageKind } from './collection.js';
+import { loadGameday, getGameday, defaultKicker } from './gameday.js';
 
 const $ = sel => document.querySelector(sel);
 
@@ -20,7 +21,8 @@ const state = {
   panX: 0,
   panY: 0,
   guides: false,
-  fields: { headline: '', name: '', number: '', section: '', since: '', kicker: 'WEEK 01' },
+  fields: { headline: '', name: '', number: '', section: '', row: '', seat: '', since: '', kicker: '' },
+  wallpaperDevice: null,
 };
 
 const marks = {};
@@ -30,6 +32,34 @@ const ctx = canvas.getContext('2d', { alpha: false });
 
 const effectiveSurface = () =>
   state.surface === 'lock' && !state.device.lock ? 'home' : state.surface;
+
+const isShareMode = () => state.surface === 'share';
+
+// Share swaps the canvas to a square card and back, remembering which handset
+// the fan was on so the wallpaper is unchanged when they switch back.
+function applySurface(next) {
+  const wasShare = isShareMode();
+  state.surface = next;
+  if (next === 'share' && !wasShare) {
+    state.wallpaperDevice = state.device.id;
+    state.device = getDevice(SHARE_SQUARE);
+    if (state.template.gameday !== true) state.template = getTemplate('my-seat');
+  } else if (next !== 'share' && wasShare) {
+    state.device = getDevice(state.wallpaperDevice || state.device.id);
+  }
+  document.getElementById('app').classList.toggle('share-mode', next === 'share');
+  $('#share').hidden = next !== 'share';
+  $('#export').textContent = next === 'share' ? 'Save the card' : 'Download wallpaper';
+  syncTemplateButtons();
+  setDeviceLabel();
+  syncSurfaceControls();
+  scheduleRender();
+}
+
+function syncTemplateButtons() {
+  document.querySelectorAll('.tpl').forEach(b =>
+    b.setAttribute('aria-pressed', String(b.dataset.id === state.template.id)));
+}
 
 // --- rendering -------------------------------------------------------------
 
@@ -525,6 +555,33 @@ async function renderCollection() {
   }
 }
 
+async function shareCard() {
+  if (!state.image) { setStatus('Pick a photo first.', true); return; }
+  const g = getGameday();
+  const out = renderExport();
+  const blob = await new Promise(r => out.toBlob(r, 'image/jpeg', 0.92));
+  if (!blob) { setStatus('Could not build the card.', true); return; }
+
+  const seat = state.fields.section
+    ? `Section ${state.fields.section}` : '';
+  const text = [seat, [g.week, g.venue].filter(Boolean).join(' at '), g.hashtag]
+    .filter(Boolean).join(' \u2605 ');
+  const file = new File([blob], `texans-${g.week || 'gameday'}-seat.jpg`.replace(/\s+/g, '-').toLowerCase(), { type: 'image/jpeg' });
+
+  if (navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], text });
+      setStatus('Sent.');
+    } catch (err) {
+      if (err?.name !== 'AbortError') setStatus('Could not open the share sheet.', true);
+    }
+    return;
+  }
+  // Desktop and older browsers have no share sheet; fall back to a download.
+  setStatus('Sharing is not available here — saving instead.');
+  exportWallpaper();
+}
+
 async function loadMarks() {
   const load = src => new Promise(resolve => {
     const img = new Image();
@@ -564,8 +621,7 @@ async function init() {
   $('#device-btn').addEventListener('click', () => $('#device-sheet').showModal());
   document.querySelectorAll('[name="surface"]').forEach(radio => {
     radio.addEventListener('change', () => {
-      if (radio.checked) state.surface = radio.value;
-      scheduleRender();
+      if (radio.checked) applySurface(radio.value);
     });
   });
   $('#guides-btn').addEventListener('click', e => {
@@ -574,6 +630,7 @@ async function init() {
     scheduleRender();
   });
   $('#export').addEventListener('click', exportWallpaper);
+  $('#share').addEventListener('click', shareCard);
   $('#keep').addEventListener('click', keepCurrent);
   $('#export').disabled = true;
 
@@ -584,6 +641,17 @@ async function init() {
   // immediately rather than after 600KB of assets.
   scheduleRender();
   buildLibrary();
+
+  const g = await loadGameday();
+  if (!state.fields.kicker) {
+    state.fields.kicker = defaultKicker(g);
+    const input = document.querySelector('[data-field="kicker"]');
+    if (input) input.value = state.fields.kicker;
+  }
+  if (g.week) {
+    const el = document.querySelector('.start-kicker');
+    if (el) el.textContent = [g.week, g.opponentShort && `vs ${g.opponentShort}`].filter(Boolean).join(' // ');
+  }
 
   const fonts = await loadFonts();
   await loadMarks();
@@ -614,5 +682,6 @@ window.__studio = {
   setSurface: s => { state.surface = s; scheduleRender(); },
   setFields: patch => { Object.assign(state.fields, patch); scheduleRender(); },
   setTab: name => document.querySelector(`.tab[data-tab="${name}"]`)?.click(),
+  applySurface, isShareMode, shareCard,
   keepCurrent, renderCollection,
 };

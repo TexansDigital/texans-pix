@@ -19,6 +19,7 @@ import {
   BRAND, WEIGHTS, TONE, protectBand, scrimTop, scrimFlat, rule, isLightBackdrop,
   monoStamp, layoutDisplay, drawDisplay, fitLine, tickerStrip, drawBadge,
 } from './compose.js';
+import { getGameday, matchup, kickoffLabel, defaultKicker } from './gameday.js';
 
 // A field counts as present only if it has non-whitespace in it. A single
 // space used to slip through every `||` fallback and blank the hero line.
@@ -47,6 +48,10 @@ function badgeMark(marks, sample, H, top, size) {
 
 function frame(W, H, device, surface) {
   const m = Math.round(W * MARGIN);
+  if (device.share) {
+    // Nothing to dodge on a card that is sent rather than set as a wallpaper.
+    return { m, left: m, right: W - m, width: W - m * 2, top: H * 0.05, bottom: H * 0.94 };
+  }
   const lock = surface === 'lock' ? device.lock : null;
   let top, bottom;
   if (lock) {
@@ -252,6 +257,108 @@ export const TEMPLATES = [
         const badgeSize = W * 0.12;
         drawBadge(ctx, badgeMark(marks, sample, H, f.top, badgeSize), f.left, f.top, badgeSize);
       }
+    },
+  },
+  {
+    id: 'my-seat',
+    label: 'My Seat',
+    note: 'Section and row as the hero. Built to send, not to set.',
+    gameday: true,
+    draw(ctx, { W, H, device, surface, fields, marks, sample }) {
+      const f = frame(W, H, device, surface);
+      const g = getGameday();
+      const stampSize = W * 0.028;
+
+      const seat = val(fields.section);
+      const rowLabel = join(labeled('ROW', fields.row), labeled('SEAT', fields.seat));
+      const foot = join(matchup(g), kickoffLabel(g));
+
+      // Measure bottom-up so the scrim covers exactly what gets drawn.
+      let y = f.bottom;
+      const footY = has(foot) ? y : null;
+      if (footY !== null) y -= stampSize * 2.5;
+
+      const nameLayout = layoutDisplay(ctx, pick(fields.name, g.hashtag, 'HOUSTON'), {
+        size: W * 0.075, maxWidth: f.width, maxHeight: (y - f.top) * 0.3, maxLines: 1,
+      });
+      y -= nameLayout.height;
+      const nameY = y;
+
+      let numSize = 0, numY = y;
+      const label = has(seat) ? 'SECTION' : '';
+      if (has(seat)) {
+        numSize = fitLine(ctx, seat, {
+          size: W * 0.40, maxWidth: f.width, maxHeight: (y - f.top) * 0.55,
+        });
+        numY = y - numSize * 0.2;
+        y = numY - numSize * 0.86;
+      }
+      const labelY = has(label) ? y - stampSize * 0.6 : y;
+      if (has(label)) y = labelY - stampSize * 1.8;
+      const rowY = has(rowLabel) ? y - stampSize * 0.4 : y;
+      if (has(rowLabel)) y = rowY - stampSize * 1.8;
+
+      protectBand(ctx, W, H, {
+        fromFrac: Math.max(0, (y - H * 0.03)) / H,
+        tone: has(seat) ? TONE.red : TONE.white, floor: 0.5, sample,
+      });
+
+      if (has(rowLabel)) monoStamp(ctx, rowLabel, f.left, rowY, stampSize, 'rgba(255,255,255,.8)', 'left', f.width);
+      if (has(label)) monoStamp(ctx, label, f.left, labelY, stampSize, BRAND.battleRed, 'left', f.width);
+      if (has(seat)) {
+        ctx.save();
+        ctx.font = `${WEIGHTS.black} ${numSize}px ${BRAND.display}`;
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillStyle = BRAND.redHot;
+        ctx.fillText(seat.toUpperCase(), f.left, numY);
+        ctx.restore();
+      }
+      drawDisplay(ctx, nameLayout, { x: f.left, y: nameY, color: BRAND.white });
+      if (footY !== null) monoStamp(ctx, foot, f.left, footY, stampSize, 'rgba(255,255,255,.85)', 'left', f.width);
+
+      const badgeSize = W * 0.11;
+      drawBadge(ctx, badgeMark(marks, sample, H, f.top, badgeSize), W - f.m - badgeSize, f.top, badgeSize);
+    },
+  },
+
+  {
+    id: 'gameday',
+    label: 'Gameday',
+    note: 'This week\'s matchup and date, straight from the schedule.',
+    gameday: true,
+    draw(ctx, { W, H, device, surface, fields, marks, sample }) {
+      const f = frame(W, H, device, surface);
+      const g = getGameday();
+      const stampSize = W * 0.028;
+      const stripH = Math.round(H * 0.03);
+      const stripTop = tickerTop(H, f, device, surface, stripH);
+
+      const foot = join(g.venue, labeled('SEC', fields.section), fields.name);
+      let y = stripTop - stripH * 0.8;
+      const footY = has(foot) ? y : null;
+      if (footY !== null) y -= stampSize * 2.4;
+
+      const dateLine = join(pick(fields.kicker, defaultKicker(g)), kickoffLabel(g));
+      const dateY = has(dateLine) ? y : null;
+      if (dateY !== null) y -= stampSize * 2.4;
+
+      const headline = pick(fields.headline, matchup(g), 'HOUSTON TEXANS');
+      const layout = layoutDisplay(ctx, headline, {
+        size: W * 0.145, maxWidth: f.width, maxHeight: (y - f.top) * 0.85, maxLines: 3,
+      });
+      y -= layout.height;
+      const ruleY = y - H * 0.02;
+
+      protectBand(ctx, W, H, {
+        fromFrac: Math.max(0, ruleY - H * 0.03) / H,
+        toFrac: (stripTop + stripH) / H, tone: TONE.white, floor: 0.5, sample,
+      });
+      tickerStrip(ctx, W, stripTop, stripH);
+
+      rule(ctx, f.left, ruleY, W * 0.18, Math.max(1, H * 0.006));
+      drawDisplay(ctx, layout, { x: f.left, y, color: BRAND.white });
+      if (dateY !== null) monoStamp(ctx, dateLine, f.left, dateY, stampSize, BRAND.battleRed, 'left', f.width);
+      if (footY !== null) monoStamp(ctx, foot, f.left, footY, stampSize, 'rgba(255,255,255,.82)', 'left', f.width);
     },
   },
 ];

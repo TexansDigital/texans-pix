@@ -410,3 +410,13 @@ input[type="text"]::placeholder { color: var(--text-muted) }
 }
 .start .btn { width: 100%; max-width: 320px }
 .start .hint { max-width: 34ch; margin-top: var(--space-3) }
+
+.action-row { display: flex; gap: 8px; width: 100%; justify-content: center; flex-wrap: wrap }
+.action-row .btn { flex: 1 1 160px; max-width: 320px }
+#app.share-mode .seg span { min-width: 46px; padding: 0 8px }
+.gameday-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: .14em; text-transform: uppercase;
+  color: var(--battle-red);
+}
