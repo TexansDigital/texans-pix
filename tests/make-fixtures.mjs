@@ -59,3 +59,20 @@ console.log('fixtures written to', OUT);
 writeFileSync(OUT + 'dark-2000x3000.png', await sharp({ create: { width: 2000, height: 3000, channels: 3, background: { r: 8, g: 10, b: 12 } } }).png().toBuffer());
 // 12. Mid-grey plate — the case that fools an alpha tuned only for the extremes.
 writeFileSync(OUT + 'grey-2000x3000.png', await sharp({ create: { width: 2000, height: 3000, channels: 3, background: { r: 128, g: 128, b: 128 } } }).png().toBuffer());
+// 13. Half black / half white — the case a MEAN-based scrim alpha under-serves:
+// the mean reads mid-grey while the white half stays bright behind the type.
+{
+  const w = 2000, h = 3000;
+  const white = await sharp({ create: { width: w, height: h / 2, channels: 3, background: { r: 255, g: 255, b: 255 } } }).png().toBuffer();
+  writeFileSync(OUT + 'split-2000x3000.png', await sharp({ create: { width: w, height: h, channels: 3, background: { r: 0, g: 0, b: 0 } } })
+    .composite([{ input: white, top: h / 2, left: 0 }]).png().toBuffer());
+}
+// 14. Fine black/white checker — mean mid-grey, every other pixel pure white.
+{
+  const S = 2000, T = 3000, px = Buffer.alloc(S * T * 3);
+  for (let y = 0; y < T; y++) for (let x = 0; x < S; x++) {
+    const v = ((x >> 3) + (y >> 3)) % 2 ? 255 : 0;
+    const i = (y * S + x) * 3; px[i] = px[i + 1] = px[i + 2] = v;
+  }
+  writeFileSync(OUT + 'checker-2000x3000.png', await sharp(px, { raw: { width: S, height: T, channels: 3 } }).png().toBuffer());
+}

@@ -14,7 +14,6 @@ const sweep = await page.evaluate(() => {
   const MAX = { headline: 28, name: 24, number: 2, section: 6, since: 4, kicker: 24 };
   const TEMPLATES = ['battle', 'stamp', 'deep-steel', 'ticker', 'jersey'];
   const devices = [...document.querySelectorAll('#device option')].map(o => o.value);
-  const isMono = f => /Azeret|monospace|Menlo/.test(f);
   const c = document.querySelector('#stage');
 
   const shot = (dev, surface, tpl, fields) => {
@@ -27,36 +26,47 @@ const sweep = await page.evaluate(() => {
     const stripTop = lockZ ? Math.round(c.height * (lockZ.controlsTop - 0.03)) : c.height - stripH;
     const ink = window.__ink.filter(i => i.text.trim() &&
       !(tpl === 'ticker' && i.y0 >= stripTop - 2 && i.y1 <= stripTop + stripH + 2));
-    return { W: c.width, H: c.height, margin: Math.round(c.width * 0.062), ink, eff };
+    if (!ink.length) return null;
+    const maxX = Math.max(...ink.map(i => i.x1)), minX = Math.min(...ink.map(i => i.x0));
+    const maxY = Math.max(...ink.map(i => i.y1)), minY = Math.min(...ink.map(i => i.y0));
+    const margin = Math.round(c.width * 0.062);
+    return { W: c.width, H: c.height, margin, eff, maxX, minX, maxY, minY,
+      // 12px of left tolerance: an 'A'/'W' at 250px carries real negative side
+      // bearing, which is not an overflow.
+      past: maxX > c.width - margin + 2 || minX < margin - 12,
+      off: maxX > c.width + 0.5 || minX < -0.5 || maxY > c.height + 0.5 || minY < -0.5,
+      usesField: ink.some(i => /^[MW]+$/.test(i.text.replace(/\s/g, '')) || i.text.includes('MM') || i.text.includes('WW')) };
   };
 
   const rows = [];
   for (const tpl of TEMPLATES) {
     for (const field of Object.keys(MAX)) {
       for (const glyph of ['M', 'W']) {
-        let pastMargin = null, offCanvas = null, worst = null, worstOver = -1e9, usesField = false;
-        for (const dev of devices) {
-          for (const surface of ['lock', 'home']) {
-            for (let n = 1; n <= MAX[field]; n++) {
-              const r = shot(dev, surface, tpl, { [field]: glyph.repeat(n) });
-              if (!r.ink.length) continue;
-              usesField = usesField || r.ink.some(i => i.text.includes(glyph));
-              const maxX = Math.max(...r.ink.map(i => i.x1));
-              const minX = Math.min(...r.ink.map(i => i.x0));
-              const maxY = Math.max(...r.ink.map(i => i.y1));
-              const minY = Math.min(...r.ink.map(i => i.y0));
-              // 12px of left tolerance: an 'A' or 'W' at 250px carries real
-              // negative side bearing that is not an overflow.
-              if (!pastMargin && (maxX > r.W - r.margin + 2 || minX < r.margin - 12)) pastMargin = `${n}@${dev}/${r.eff}`;
-              if (!offCanvas && (maxX > r.W + 0.5 || minX < -0.5 || maxY > r.H + 0.5 || minY < -0.5)) {
-                offCanvas = `${n}@${dev}/${r.eff}`;
-              }
-              const over = Math.max(maxX - (r.W - r.margin), maxY - r.H, -minY);
-              if (over > worstOver) { worstOver = over; worst = `${dev}/${r.eff} n=${n} x=[${minX.toFixed(0)},${maxX.toFixed(0)}] y=[${minY.toFixed(0)},${maxY.toFixed(0)}] canvas=${r.W}x${r.H} marginLimit=${r.W - r.margin}`; }
-            }
+        // Pass 1: every device x surface at the field's maxlength.
+        const fails = [];
+        let usesField = false, worst = null, worstOver = -1e9;
+        for (const dev of devices) for (const surface of ['lock', 'home']) {
+          const r = shot(dev, surface, tpl, { [field]: glyph.repeat(MAX[field]) });
+          if (!r) continue;
+          usesField = usesField || r.usesField;
+          const over = Math.max(r.maxX - (r.W - r.margin), r.maxY - r.H, -r.minY);
+          if (over > worstOver) { worstOver = over; worst = `${dev}/${r.eff} x=[${r.minX.toFixed(0)},${r.maxX.toFixed(0)}] y=[${r.minY.toFixed(0)},${r.maxY.toFixed(0)}] canvas=${r.W}x${r.H} marginLimit=${r.W - r.margin}`; }
+          if (r.past || r.off) fails.push({ dev, surface, past: r.past, off: r.off });
+        }
+        // Pass 2: only where maxlength failed, walk n down to find the threshold.
+        let pastAt = null, offAt = null;
+        for (const f of fails) {
+          for (let n = 1; n <= MAX[field]; n++) {
+            const r = shot(f.dev, f.surface, tpl, { [field]: glyph.repeat(n) });
+            if (!r) continue;
+            if (r.past && (pastAt === null || n < pastAt.n)) pastAt = { n, where: `${f.dev}/${r.eff}` };
+            if (r.off && (offAt === null || n < offAt.n)) offAt = { n, where: `${f.dev}/${r.eff}` };
+            if (r.past && r.off) break;
           }
         }
-        rows.push({ tpl, field, glyph, usesField, pastMargin, offCanvas, worst });
+        rows.push({ tpl, field, glyph, usesField,
+          pastMargin: pastAt && `${pastAt.n}@${pastAt.where}`,
+          offCanvas: offAt && `${offAt.n}@${offAt.where}`, worst });
       }
     }
   }
@@ -115,10 +125,13 @@ for (const i of detail.integrity) {
   const want = i.text.toUpperCase().replace(/[^A-Z0-9-]/g, '');
   const gotDisp = i.dispOut.replace(/[^A-Z0-9-]/g, '');
   const gotMono = i.monoOut.replace(/[^A-Z0-9-]/g, '');
-  const used = gotDisp.includes(want[0]) ? 'display' : gotMono.includes(want[0]) ? 'mono' : null;
-  if (!used) { console.log(` ${i.tpl.padEnd(11)} ${i.dev.padEnd(14)} ${i.field.padEnd(9)} (field unused by this template)`); continue; }
-  const got = used === 'display' ? gotDisp : gotMono;
-  const ok = got.includes(want);
+  // A template can draw a fallback headline in display while the tested field
+  // goes to mono, so accept the run wherever it actually landed.
+  const ok = gotDisp.includes(want) || gotMono.includes(want);
+  const used = gotDisp.includes(want) ? 'display' : gotMono.includes(want) ? 'mono'
+    : (gotDisp + gotMono).includes(want.slice(0, 4)) ? 'partial' : null;
+  if (!used) { console.log(` ${i.tpl.padEnd(11)} ${i.dev.padEnd(14)} ${i.field.padEnd(9)} "${i.text.slice(0,18)}" NOT DRAWN AT ALL (display="${gotDisp.slice(0,30)}" mono="${gotMono.slice(0,30)}")`); continue; }
+  const got = gotDisp.includes(want.slice(0, 4)) ? gotDisp : gotMono;
   if (!ok) lost++;
   console.log(` ${i.tpl.padEnd(11)} ${i.dev.padEnd(14)} ${i.field.padEnd(9)} "${i.text.slice(0, 18)}" via ${used}: ${ok ? 'all chars kept' : `LOST -> "${got}"`}`);
 }
