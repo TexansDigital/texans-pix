@@ -76,7 +76,11 @@ for (const dev of devices) {
           const push = (kind, detail) => findings.push({ tag, kind, text: ink.text.slice(0, 24), detail });
           if (ink.y0 < bandTop - 1) push('above-safe-band', `y0=${ink.y0.toFixed(0)} < bandTop=${bandTop.toFixed(0)}`);
           if (ink.y1 > bandBottom + 1) push('below-safe-band', `y1=${ink.y1.toFixed(0)} > bandBottom=${bandBottom.toFixed(0)}`);
-          if (ink.x0 < r.margin - 1) push('left-overflow', `x0=${ink.x0.toFixed(0)} < margin=${r.margin}`);
+          // Glyph side bearing: an 'A' or 'W' in the Black Extended cut carries
+          // real ink up to ~4% of the cap height left of the pen. Allow 5% of
+          // the font size before calling it an overflow.
+          const fsize = +(/(\d+(?:\.\d+)?)px/.exec(ink.font) || [0, 0])[1];
+          if (ink.x0 < r.margin - Math.max(2, fsize * 0.05)) push('left-overflow', `x0=${ink.x0.toFixed(0)} < margin=${r.margin} (font ${fsize}px)`);
           if (ink.x1 > r.W - r.margin + 1) push('right-overflow', `x1=${ink.x1.toFixed(0)} > ${r.W - r.margin}`);
           if (ink.x1 > r.W + 0.5 || ink.x0 < -0.5) push('OFF-CANVAS', `x=[${ink.x0.toFixed(0)},${ink.x1.toFixed(0)}] canvas 0..${r.W}`);
           if (ink.y1 > r.H + 0.5 || ink.y0 < -0.5) push('OFF-CANVAS-V', `y=[${ink.y0.toFixed(0)},${ink.y1.toFixed(0)}] canvas 0..${r.H}`);

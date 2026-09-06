@@ -10,14 +10,30 @@ await page.evaluate(() => window.addEventListener('unhandledrejection', e => win
 
 console.log('=== A. Export with no photo picked ===');
 {
-  const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 8000 }).catch(() => null), page.click('#export')]);
+  const state = await page.evaluate(() => {
+    const b = document.querySelector('#export');
+    return { disabled: b.disabled, ariaDisabled: b.getAttribute('aria-disabled'), pointer: getComputedStyle(b).pointerEvents, opacity: getComputedStyle(b).opacity };
+  });
+  console.log(' #export at boot:', JSON.stringify(state));
+  // A disabled button will not accept a normal click, so force one AND call the
+  // handler directly: neither route may produce a file.
+  const [dl] = await Promise.all([
+    page.waitForEvent('download', { timeout: 4000 }).catch(() => null),
+    page.click('#export', { force: true }).catch(e => console.log(' forced click rejected:', String(e).split('\n')[0])),
+  ]);
+  console.log(' forced click on the disabled button produced a download?', !!dl);
   if (dl) {
     const p = '/home/user/texans-pix/tests/out/no-photo.jpg';
     await dl.saveAs(p);
     const m = await sharp(p).metadata();
-    const stats = await sharp(p).stats();
-    console.log(' exported anyway:', dl.suggestedFilename(), `${m.width}x${m.height}`, 'mean channel:', stats.channels.map(c => Math.round(c.mean)).join(','));
-  } else console.log(' no download');
+    console.log('  <-- EXPORTED ANYWAY:', dl.suggestedFilename(), `${m.width}x${m.height}`);
+  }
+  // and via the keyboard, which is how a real user would reach it
+  const [dl2] = await Promise.all([
+    page.waitForEvent('download', { timeout: 3000 }).catch(() => null),
+    page.evaluate(() => { const b = document.querySelector('#export'); b.focus(); b.dispatchEvent(new MouseEvent('click', { bubbles: true })); }),
+  ]);
+  console.log(' synthetic click event on the disabled button produced a download?', !!dl2);
   console.log(' status:', await page.textContent('#status'));
 }
 

@@ -34,7 +34,8 @@ const geo = await page.evaluate(async ({ devices }) => {
         const r = coverRect(img, d.w, d.h, z, px, py);
         const gapL = r.x, gapT = r.y, gapR = d.w - (r.x + r.w), gapB = d.h - (r.y + r.h);
         const worst = Math.max(gapL, gapT, gapR, gapB);
-        if (worst > 0) bad.push({ dev: d.id, img: img.name, z: +z.toFixed(2), px, py, gapL: +gapL.toFixed(6), gapT: +gapT.toFixed(6), gapR: +gapR.toFixed(6), gapB: +gapB.toFixed(6) });
+        // 1e-6 px, not 0: coverRect is float maths and leaves ~1e-13 residue.
+        if (worst > 1e-6) bad.push({ dev: d.id, img: img.name, z: +z.toFixed(2), px, py, gapL: +gapL.toFixed(6), gapT: +gapT.toFixed(6), gapR: +gapR.toFixed(6), gapB: +gapB.toFixed(6) });
       }
     }
   }
