@@ -1,0 +1,65 @@
+name: Deploy studio to GitHub Pages
+
+# Serves the studio as a static site. Everything runs in the fan's browser, so
+# there is nothing to host beyond the files themselves.
+#
+# One-time setup: Settings -> Pages -> Source -> "GitHub Actions".
+
+on:
+  push:
+    branches:
+      - main
+      - claude/gameday-photo-monetization-rybr7u
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race; the newest push wins.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install (sharp, for the library build)
+        run: npm install --no-audit --no-fund
+
+      - name: Rebuild the photo library
+        run: npm run library
+
+      - name: Assemble the site
+        run: |
+          mkdir -p _site
+          cp index.html _site/
+          cp -r src assets library _site/
+          # Pages runs Jekyll by default, which would swallow anything
+          # underscore-prefixed. Opt out.
+          touch _site/.nojekyll
+          echo "Assembled:"
+          du -sh _site
+          find _site -maxdepth 2 -type d | sort
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
