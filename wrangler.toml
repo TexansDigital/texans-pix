@@ -18,5 +18,9 @@ compatibility_date = "2026-01-01"
 
 [assets]
 directory = "./_site"
-# Serve index.html for bare paths; this is a single-page static app.
-not_found_handling = "single-page-application"
+# A missing file must answer 404, not 200. This is one page at /, not an app
+# with client-side routes, so nothing needs a catch-all — and the SPA fallback
+# served index.html under every wrong URL, which meant a broken asset path
+# looked fine and a deleted file looked like it was still there. `/` still
+# resolves to index.html through the default html_handling.
+not_found_handling = "none"
