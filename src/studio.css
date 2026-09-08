@@ -420,3 +420,23 @@ input[type="text"]::placeholder { color: var(--text-muted) }
   letter-spacing: .14em; text-transform: uppercase;
   color: var(--battle-red);
 }
+
+/* Tonight's frames lead. The dot pulses so a shelf that is live reads as live,
+   and stops entirely for anyone who asked for less motion. */
+.stamp.live { color: var(--battle-red) }
+.stamp.live::first-letter { font-size: 14px }
+#tonight-block { display: flex; flex-direction: column; gap: var(--space-3) }
+#tonight .thumb { border-color: rgba(235, 0, 40, .55) }
+@keyframes livepulse { 0%, 100% { opacity: 1 } 50% { opacity: .45 } }
+.stamp.live { animation: livepulse 2.4s ease-in-out infinite }
+@media (prefers-reduced-motion: reduce) { .stamp.live { animation: none } }
+.thumb .moment {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 3px 4px;
+  background: rgba(2, 17, 24, .84);
+  font-family: var(--font-mono); font-size: 8px;
+  letter-spacing: .08em; text-transform: uppercase;
+  color: var(--text-body);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.thumb { position: relative }

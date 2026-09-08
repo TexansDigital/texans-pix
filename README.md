@@ -16,6 +16,34 @@ npm start        # serves on http://localhost:8080
 Open `http://localhost:8080`. Serve over HTTP rather than opening the file
 directly; ES modules and canvas behave differently on `file://`.
 
+## Gameday
+
+Leave this running on the machine your editors file to:
+
+```sh
+npm run watch -- --deploy
+```
+
+Then during the game your editor drops a frame into
+`library/photos/tonight/` and walks away. The watcher settles for four
+seconds (so a burst of exports is one build), rebuilds, and pushes it live.
+No commands, nobody at a keyboard in the fourth quarter.
+
+Those frames appear in a **Tonight** shelf above the season library, newest
+first, so the touchdown from two minutes ago is the first thing a fan sees.
+
+**The moment stamp writes itself.** Name the file
+`q3-stroud-42yd-td.jpg` and it becomes `Q3 // STROUD 42YD TD`. Or drop a
+`.txt` sidecar next to the photo — `q3-stroud-42yd-td.txt` — and its first
+line is used verbatim, so the caption your editors already write for the wire
+becomes the stamp. Tapping that frame pre-fills the fan's kicker with it.
+
+After the whistle:
+
+```sh
+npm run archive     # moves tonight's frames onto the season shelf
+```
+
 ## The weekly photo drop
 
 1. Put this week's frames in `library/photos/` (tuned for ~100).
@@ -41,7 +69,10 @@ a week, not everything the shooters filed.
 | `src/templates.js` | the five wallpaper templates |
 | `src/compose.js` | canvas primitives, fonts, image decode |
 | `src/app.js` | UI wiring |
-| `tools/build-library.mjs` | weekly library build |
+| `tools/build-library.mjs` | library build, season and tonight |
+| `tools/watch-library.mjs` | gameday ingest: watch, build, deploy |
+| `tools/archive-tonight.mjs` | clear the Tonight shelf after the game |
+| `gameday.json` | this week's game — everything themed reads from it |
 | `.claude/agents/studio-qa.md` | the QA agent that stress-tests this |
 
 ## Design rules the templates hold to

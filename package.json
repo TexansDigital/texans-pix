@@ -10,7 +10,9 @@
     "site": "node tools/build-site.mjs",
     "deploy": "npm run check && npm run library && npm run site && npx wrangler deploy",
     "preview": "npm run library && npm run site && npx wrangler dev",
-    "check": "node tools/preflight.mjs"
+    "check": "node tools/preflight.mjs",
+    "watch": "node tools/watch-library.mjs",
+    "archive": "node tools/archive-tonight.mjs"
   },
   "devDependencies": {
     "sharp": "^0.35.4"

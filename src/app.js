@@ -176,6 +176,12 @@ async function useLibraryPhoto(entry) {
     const res = await fetch(src);
     if (!res.ok) throw new ImageError(`Could not load that photo (${res.status}).`);
     await useSource(await res.blob(), entry.title || entry.id, entry.id);
+    if (entry.tonight && entry.moment) {
+      state.fields.kicker = entry.moment;
+      const input = document.querySelector('[data-field="kicker"]');
+      if (input) input.value = entry.moment;
+      scheduleRender();
+    }
   } catch (err) {
     setStatus(err instanceof ImageError ? err.message : 'Could not load that photo.', true);
   }
@@ -241,36 +247,55 @@ function buildTemplateList() {
   }
 }
 
+function makeThumb(entry, grid) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'thumb';
+  btn.title = entry.moment || entry.title || entry.id;
+  const img = document.createElement('img');
+  img.src = entry.thumb || entry.file;
+  img.alt = entry.title || entry.id;
+  img.loading = 'lazy';
+  btn.appendChild(img);
+  if (entry.tonight && entry.moment) {
+    const m = document.createElement('span');
+    m.className = 'moment';
+    m.textContent = entry.moment;
+    btn.appendChild(m);
+  }
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.thumb').forEach(b => b.classList.remove('on'));
+    btn.classList.add('on');
+    useLibraryPhoto(entry);
+  });
+  LIBRARY_INDEX.set(entry.id, entry);
+  grid.appendChild(btn);
+}
+
 async function buildLibrary() {
   const grid = $('#library');
+  const live = $('#tonight');
   try {
     const res = await fetch('library/manifest.json', { cache: 'no-store' });
     if (!res.ok) throw new Error(String(res.status));
     const photos = (await res.json()).photos || [];
     grid.innerHTML = '';
-    if (!photos.length) {
+    live.innerHTML = '';
+
+    const tonight = photos.filter(p => p.tonight);
+    const season = photos.filter(p => !p.tonight);
+
+    // The frame from two minutes ago leads; the season shelf is below it.
+    $('#tonight-block').hidden = tonight.length === 0;
+    $('#tonight-count').textContent = tonight.length ? `${tonight.length} from this game` : '';
+    for (const entry of tonight) makeThumb(entry, live);
+
+    if (!season.length && !tonight.length) {
       grid.innerHTML = '<p class="empty">No photos yet. Drop this week\'s files into <code>library/photos/</code> and run <code>npm run library</code>.</p>';
       return;
     }
-    $('#lib-count').textContent = `${photos.length} this week`;
-    for (const entry of photos) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'thumb';
-      btn.title = entry.title || entry.id;
-      const img = document.createElement('img');
-      img.src = entry.thumb || entry.file;
-      img.alt = entry.title || entry.id;
-      img.loading = 'lazy';
-      btn.appendChild(img);
-      btn.addEventListener('click', () => {
-        grid.querySelectorAll('.thumb').forEach(b => b.classList.remove('on'));
-        btn.classList.add('on');
-        useLibraryPhoto(entry);
-      });
-      LIBRARY_INDEX.set(entry.id, entry);
-      grid.appendChild(btn);
-    }
+    $('#lib-count').textContent = season.length ? `${season.length} this week` : '';
+    for (const entry of season) makeThumb(entry, grid);
   } catch {
     grid.innerHTML = '<p class="empty">Library manifest missing. Run <code>npm run library</code>.</p>';
   }
