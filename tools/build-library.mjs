@@ -12,7 +12,7 @@
 // next to the photo if there is one, otherwise from the filename. Your editors
 // already caption for the wire; that caption is the stamp.
 
-import { readdir, mkdir, writeFile, stat, readFile } from 'node:fs/promises';
+import { readdir, mkdir, writeFile, stat, readFile, unlink } from 'node:fs/promises';
 import { join, extname, basename } from 'node:path';
 import sharp from 'sharp';
 
@@ -106,6 +106,19 @@ async function ingest(dir, file, tonight, photos, failures) {
   }
 }
 
+async function prune(wanted) {
+  let removed = 0;
+  for (const dir of [THUMBS, DISPLAY]) {
+    let files;
+    try { files = await readdir(dir); } catch { continue; }
+    for (const file of files) {
+      if (extname(file).toLowerCase() !== '.jpg' || wanted.has(file)) continue;
+      try { await unlink(join(dir, file)); removed += 1; } catch { /* already gone */ }
+    }
+  }
+  return removed;
+}
+
 async function main() {
   await mkdir(THUMBS, { recursive: true });
   await mkdir(DISPLAY, { recursive: true });
@@ -126,6 +139,20 @@ async function main() {
   process.stdout.write('\n');
 
   photos.sort((a, b) => (b.tonight - a.tonight) || (b.shot - a.shot));
+
+  // A photo pulled out of library/photos/ must take its derivatives with it.
+  // thumbs/ and display/ are generated and gitignored, so a file deleted from
+  // the source shelf otherwise survives on disk and gets copied into _site/ by
+  // the site build — off the manifest, invisible in the studio, and still live
+  // at a direct URL. Prune anything with no source behind it.
+  // Keyed off the source listings rather than `photos`, so a frame that failed
+  // to process this run keeps its last good derivative instead of losing it.
+  const wanted = new Set([
+    ...tonight.map(f => `tonight-${basename(f, extname(f))}.jpg`),
+    ...season.map(f => `${basename(f, extname(f))}.jpg`),
+  ]);
+  const pruned = await prune(wanted);
+  if (pruned) console.log(`pruned ${pruned} orphaned derivative${pruned === 1 ? '' : 's'}`);
 
   const total = photos.length;
   if (total > SOFT_LIMIT) {

@@ -14,3 +14,10 @@ _site/
 library/manifest.json
 library/thumbs/
 library/display/
+
+# Gameday frames, filed live into the Tonight shelf and cleared by
+# `npm run archive`. They are ephemeral and never belong in version control —
+# a test fixture committed here once shipped a fabricated play to the public
+# site. The README explaining that stays tracked.
+library/photos/tonight/*
+!library/photos/tonight/README.md
