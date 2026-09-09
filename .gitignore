@@ -21,3 +21,8 @@ library/display/
 # site. The README explaining that stays tracked.
 library/photos/tonight/*
 !library/photos/tonight/README.md
+
+# Local Worker state and build scratch from `wrangler dev` / `wrangler deploy`.
+# Miniflare writes sqlite for D1, KV, R2 and the cache in here; it is per-machine
+# and rebuilt on demand.
+.wrangler/
