@@ -1,4 +1,4 @@
-import { launch, feed } from './lib.mjs';
+import { launch, feed, setGuides } from './lib.mjs';
 import { writeFileSync } from 'node:fs';
 import sharp from 'sharp';
 
@@ -14,9 +14,12 @@ for (const id of devices) {
       const S = window.__studio;
       S.setDevice(id); S.setSurface(surface);
       await new Promise(res => requestAnimationFrame(() => requestAnimationFrame(res)));
-      const c = document.querySelector('#stage');
-      // Export exactly the way the app does it.
-      S.render(false);
+      // Export exactly the way the app does it. The preview canvas is no
+      // longer the export canvas — it is rendered at about a quarter megapixel
+      // for drag performance and renderExport() builds the full-size plate on
+      // download. Reading #stage here asserted the architecture the app had
+      // before that split, which is why this had been failing.
+      const c = await S.renderExport();
       const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.94));
       const bmp = await createImageBitmap(blob);
       const buf = new Uint8Array(await blob.arrayBuffer());
@@ -46,11 +49,10 @@ console.table(rows);
 console.log('ALL EXPORT DIMS OK:', rows.every(r => r.ok));
 
 // --- guides must never reach an export -------------------------------------
+await page.evaluate(() => { const S = window.__studio; S.setDevice('ip-16-pro-max'); S.setSurface('lock'); });
+await setGuides(page, true);
 const guideTest = await page.evaluate(async () => {
   const S = window.__studio;
-  S.setDevice('ip-16-pro-max'); S.setSurface('lock');
-  document.querySelector('#guides').checked = true;
-  document.querySelector('#guides').dispatchEvent(new Event('change'));
   await new Promise(res => requestAnimationFrame(() => requestAnimationFrame(res)));
   const c = document.querySelector('#stage');
   const ctx = c.getContext('2d');
@@ -80,7 +82,7 @@ const guideTest = await page.evaluate(async () => {
 console.log('guides:', JSON.stringify(guideTest));
 
 // click the actual export button with guides on, intercept the download
-await page.evaluate(() => { const g = document.querySelector('#guides'); g.checked = true; g.dispatchEvent(new Event('change')); });
+await setGuides(page, true);
 await page.waitForTimeout(300);
 const dl = await Promise.all([
   page.waitForEvent('download', { timeout: 10000 }).catch(e => null),

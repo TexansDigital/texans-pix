@@ -42,7 +42,11 @@ for (const key of ['Enter', 'Space']) {
   console.log(`  keyboard ${key} on #pick opened the file chooser:`, !!chooser[0],
     chooser[0] ? `(accepts multiple: ${chooser[0].isMultiple()})` : '');
 }
-// and by mouse
+// and by mouse. #pick lives in the controls panel, which the first-run screen
+// covers until the fan chooses a way in — so enter the studio first rather than
+// clicking at a button that is there in the DOM but not reachable on screen.
+await page.evaluate(() => document.querySelector('#start-lib').click());
+await page.waitForTimeout(200);
 const byMouse = await Promise.all([
   page.waitForEvent('filechooser', { timeout: 4000 }).catch(() => null),
   page.click('#pick'),
@@ -64,7 +68,7 @@ const styles = await page.evaluate(() => {
   const probes = [['pick button', '#pick'], ['device select', '#device'],
     ['headline text field', '[data-field="headline"]'], ['name text field', '[data-field="name"]'],
     ['number text field', '[data-field="number"]'], ['zoom range', '#zoom'],
-    ['guides checkbox', '#guides'], ['surface radio', '[name="surface"]'],
+    ['guides toggle', '#guides-btn'], ['surface radio', '[name="surface"]'],
     ['template button', '.tpl'], ['export button', '#export']];
   for (const [k, sel] of probes) {
     const el = document.querySelector(sel);

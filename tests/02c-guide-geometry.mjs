@@ -48,8 +48,7 @@ console.log('presets emitting a zero-height/zero-width guide rectangle:', bad.le
 const edge = await page.evaluate(async () => {
   const S = window.__studio, c = document.querySelector('#stage'), ctx = c.getContext('2d');
   S.setDevice('desktop'); S.setSurface('lock'); S.setTemplate('stamp');
-  document.querySelector('#guides').checked = true;
-  document.querySelector('#guides').dispatchEvent(new Event('change'));
+  document.querySelector('#guides-btn').click();
   await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
   const row = y => { const d = ctx.getImageData(0, y, c.width, 1).data; let red = 0; for (let i = 0; i < d.length; i += 4) if (d[i] - d[i + 2] > 25 && d[i] > 120) red++; return red; };
   return { effective: S.effectiveSurface(), top0: row(0), top2: row(2), bottom: row(c.height - 1), bottom3: row(c.height - 3), W: c.width };

@@ -72,6 +72,18 @@ export async function feed(page, absPath, name) {
   }, { b64, name });
 }
 
+// The zone overlay. It was a checkbox called #guides and is now a toggle button
+// called #guides-btn; three suites went on setting .checked on a null and had
+// been red ever since. One helper so the next rename breaks one line.
+export async function setGuides(page, on) {
+  await page.evaluate(async want => {
+    const btn = document.querySelector('#guides-btn');
+    if (!btn) throw new Error('#guides-btn not found');
+    if (window.__studio.state.guides !== want) btn.click();
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  }, on);
+}
+
 export async function settle(page) {
   await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
 }

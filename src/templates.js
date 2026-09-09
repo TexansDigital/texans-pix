@@ -18,6 +18,7 @@
 import {
   BRAND, WEIGHTS, TONE, protectBand, scrimTop, scrimFlat, rule, isLightBackdrop,
   monoStamp, layoutDisplay, drawDisplay, fitLine, tickerStrip, drawBadge,
+  matte, keyline, cornerMarks, verticalStamp, trackedText,
 } from './compose.js';
 import { getGameday, matchup, kickoffLabel, defaultKicker } from './gameday.js';
 
@@ -73,6 +74,26 @@ function tickerTop(H, f, device, surface, stripH) {
   const hasDock = (device.home?.dockTop ?? 1) < 1;
   return lock || hasDock ? Math.round(f.bottom) : H - stripH;
 }
+
+// Where a frame's type may sit. The bottom band of a mount runs to the physical
+// edge, but the dock or the lock-screen control row covers most of it — only
+// the strip between the safe area and that system furniture is actually seen.
+// Bands can be overlaid and still read as a frame; type cannot.
+function bandClear(H, f, device, surface) {
+  const edge = device.share ? 1
+    : (surface === 'lock' && device.lock) ? device.lock.controlsTop
+    : (device.home?.dockTop ?? 0.94);
+  const limit = H * edge;
+  return { top: f.bottom, limit, height: Math.max(0, limit - f.bottom) };
+}
+
+// One line of the fan's own details, for a frame that carries no display type.
+const identity = (fields, g) => join(
+  pick(fields.name, fields.headline),
+  labeled('NO', fields.number),
+  labeled('SEC', fields.section),
+  labeled('SINCE', fields.since),
+) || join(fields.kicker) || (g ? matchup(g) : '') || 'HOUSTON TEXANS';
 
 export const TEMPLATES = [
   {
@@ -318,6 +339,139 @@ export const TEMPLATES = [
 
       const badgeSize = W * 0.11;
       drawBadge(ctx, badgeMark(marks, sample, H, f.top, badgeSize), W - f.m - badgeSize, f.top, badgeSize);
+    },
+  },
+
+  // --- frames --------------------------------------------------------------
+  // These brand the edges and leave the aperture untouched. No scrim reaches
+  // the photograph, so the subject is never dimmed — the trade is that the
+  // fan's details are set small at an edge rather than large across the middle.
+
+  {
+    id: 'matte',
+    label: 'Matte',
+    frame: true,
+    note: 'A steel mount around the photo. Nothing is drawn over the middle.',
+    draw(ctx, { W, H, device, surface, fields, marks }) {
+      const f = frame(W, H, device, surface);
+      const band = bandClear(H, f, device, surface);
+      // The mount runs to the physical edge. Its bottom fills the dead zone the
+      // dock or control row already owns, so no photography is spent there.
+      const bottom = device.share ? Math.round(H * 0.14) : Math.round(H - f.bottom);
+      const ap = matte(ctx, W, H, {
+        top: Math.round(H * 0.018), bottom, side: Math.round(W * 0.035),
+      });
+
+      // A red rule caps the aperture: the one piece of emphasis, on steel, so
+      // it never has to fight the photo for contrast.
+      rule(ctx, ap.left, ap.bottom, Math.round(W * 0.18), Math.max(1, H * 0.0045));
+
+      const size = W * 0.028;
+      const baseline = band.height > size * 1.6
+        ? band.top + Math.min(band.height * 0.72, size * 2.2)
+        : ap.bottom + size * 2.2;
+      monoStamp(ctx, identity(fields, getGameday()), ap.left, baseline, size,
+        'rgba(255,255,255,.92)', 'left', ap.right - ap.left - W * 0.16);
+
+      const badgeSize = Math.min(W * 0.085, band.height * 0.9 || W * 0.085);
+      if (marks.bullhead) {
+        drawBadge(ctx, marks.bullhead, ap.right - badgeSize, baseline - badgeSize * 0.78, badgeSize);
+      }
+    },
+  },
+
+  {
+    id: 'keyline',
+    label: 'Keyline',
+    frame: true,
+    note: 'A thin rule boxing the photo, broken for one line of type.',
+    draw(ctx, { W, H, device, surface, fields, sample }) {
+      const f = frame(W, H, device, surface);
+      const t = Math.max(1, Math.round(H * 0.0022));
+      const inset = { x: f.left, y: f.top, w: f.width, h: f.bottom - f.top };
+      const size = W * 0.026;
+      const text = identity(fields, getGameday());
+
+      // Measure the stamp before drawing the box, so the rail breaks exactly
+      // where the type lands rather than around a guess at its width.
+      ctx.save();
+      ctx.font = `500 ${size}px ${BRAND.mono}`;
+      const measured = trackedText(ctx, String(text).toUpperCase(), 0, 0, size * 0.18, { measureOnly: true });
+      ctx.restore();
+      const stampW = Math.min(measured, inset.w - W * 0.10);
+      const gapPad = W * 0.02;
+      const stampX = inset.x + W * 0.03;
+
+      // The keyline sits over the photo, so the one line of type on it gets a
+      // narrow band of its own — a scrim across the plate, never a capsule.
+      const railY = inset.y + inset.h;
+      protectBand(ctx, W, H, {
+        fromFrac: (railY - size * 1.5) / H, toFrac: (railY + size * 0.9) / H,
+        tone: TONE.white, floor: 0.35, feather: 0.05, sample,
+      });
+
+      keyline(ctx, inset.x, inset.y, inset.w, inset.h, t, 'rgba(255,255,255,.88)',
+        { x: stampX - gapPad, w: stampW + gapPad * 2 });
+      monoStamp(ctx, text, stampX, railY + size * 0.34, size, BRAND.white, 'left', stampW);
+      // Red tick at the head of the box, the only emphasis in the frame.
+      rule(ctx, inset.x, inset.y, Math.round(W * 0.12), t * 3);
+    },
+  },
+
+  {
+    id: 'corners',
+    label: 'Corners',
+    frame: true,
+    note: 'Registration marks only. The lightest mark the studio makes.',
+    draw(ctx, { W, H, device, surface, fields, sample }) {
+      const f = frame(W, H, device, surface);
+      const rect = { left: f.left, top: f.top, right: f.right, bottom: f.bottom };
+      const t = Math.max(1, Math.round(H * 0.0028));
+      const len = Math.round(W * 0.085);
+      const size = W * 0.026;
+
+      // The stamp's scrim goes down first. Drawn after the marks its upward
+      // feather reached past the bottom of the box and erased both lower
+      // corners, leaving a frame that was only ever half there.
+      const text = join(fields.kicker) || identity(fields, getGameday());
+      const baseline = f.bottom + Math.max(size * 2.2, H * 0.024);
+      protectBand(ctx, W, H, {
+        fromFrac: (baseline - size * 1.6) / H, toFrac: (baseline + size * 0.8) / H,
+        tone: TONE.white, floor: 0.35, feather: 0.06, sample,
+      });
+
+      cornerMarks(ctx, rect, len, t, 'rgba(255,255,255,.9)');
+      // One red arm, top left, so the marks read as a mark and not as a crop.
+      rule(ctx, rect.left, rect.top, len, t);
+      monoStamp(ctx, text, f.left, baseline, size, 'rgba(255,255,255,.92)', 'left', f.width);
+    },
+  },
+
+  {
+    id: 'rail',
+    label: 'Rail',
+    frame: true,
+    note: 'A steel spine down one edge, type running up it.',
+    draw(ctx, { W, H, device, surface, fields, marks }) {
+      const f = frame(W, H, device, surface);
+      const railW = Math.round(W * 0.115);
+      ctx.fillStyle = BRAND.deepSteel;
+      ctx.fillRect(0, 0, railW, H);
+      // Red caps the spine at the top; a full red rail would be a large field
+      // of red, which the identity reserves for the ticker.
+      rule(ctx, 0, 0, railW, Math.round(H * 0.012));
+
+      const size = railW * 0.24;
+      const text = identity(fields, getGameday());
+      const runTop = f.top + H * 0.02;
+      const runBottom = f.bottom;
+      verticalStamp(ctx, text, railW * 0.66, (runTop + runBottom) / 2, size,
+        'rgba(255,255,255,.92)', runBottom - runTop);
+
+      const badgeSize = railW * 0.62;
+      if (marks.bullhead) {
+        drawBadge(ctx, marks.bullhead, (railW - badgeSize) / 2, H - badgeSize - H * 0.02, badgeSize);
+      }
     },
   },
 

@@ -360,6 +360,78 @@ function wrap(ctx, words, maxWidth) {
 }
 
 // The brand's bottom ticker strip: repeating wordmark and star on battle red.
+// --- frames ----------------------------------------------------------------
+//
+// A frame brands the edges and leaves the photograph's middle alone. The mass
+// sits in the zones a phone already covers — the status strip, the dock, the
+// control row — so the brand lands where photography was never going to
+// survive, and the subject keeps the centre. None of these touch the aperture,
+// so unlike a scrim they cannot dim a face.
+
+// Solid mount. Fills the four edge bands; the aperture is left exactly as the
+// photo drew it. Returns the aperture rect so a caller can cap or rule it.
+export function matte(ctx, W, H, { top = 0, bottom = 0, side = 0, color = BRAND.deepSteel }) {
+  const t = Math.round(top), b = Math.round(bottom), s = Math.round(side);
+  ctx.fillStyle = color;
+  if (t > 0) ctx.fillRect(0, 0, W, t);
+  if (b > 0) ctx.fillRect(0, H - b, W, b);
+  if (s > 0) {
+    ctx.fillRect(0, t, s, H - t - b);
+    ctx.fillRect(W - s, t, s, H - t - b);
+  }
+  return { left: s, top: t, right: W - s, bottom: H - b };
+}
+
+// Hollow rectangle. Four fills rather than ctx.stroke: a stroke straddles the
+// path and lands on half pixels, which exports as a soft grey line instead of
+// a crisp rule. `gap` breaks the bottom rail so a stamp can sit in the run of
+// it — the brand interrupts a line, it does not float a box over one.
+export function keyline(ctx, x, y, w, h, thickness, color = BRAND.white, gap = null) {
+  const t = Math.max(1, Math.round(thickness));
+  const X = Math.round(x), Y = Math.round(y), Wd = Math.round(w), Ht = Math.round(h);
+  ctx.fillStyle = color;
+  ctx.fillRect(X, Y, Wd, t);                       // top
+  ctx.fillRect(X, Y + t, t, Ht - t * 2);           // left
+  ctx.fillRect(X + Wd - t, Y + t, t, Ht - t * 2);  // right
+  const bottomY = Y + Ht - t;
+  if (!gap) { ctx.fillRect(X, bottomY, Wd, t); return; }
+  const gx = Math.round(gap.x), gw = Math.round(gap.w);
+  if (gx > X) ctx.fillRect(X, bottomY, gx - X, t);
+  const rightStart = gx + gw;
+  if (rightStart < X + Wd) ctx.fillRect(rightStart, bottomY, X + Wd - rightStart, t);
+}
+
+// Registration marks at the four corners: the frame implied rather than drawn.
+// The lightest touch that still reads as deliberate rather than as a crop.
+export function cornerMarks(ctx, rect, len, thickness, color = BRAND.white) {
+  const t = Math.max(1, Math.round(thickness));
+  const L = Math.round(len);
+  ctx.fillStyle = color;
+  for (const [cx, cy, sx, sy] of [
+    [rect.left, rect.top, 1, 1], [rect.right, rect.top, -1, 1],
+    [rect.left, rect.bottom, 1, -1], [rect.right, rect.bottom, -1, -1],
+  ]) {
+    const armX = sx > 0 ? cx : cx - L;
+    const armY = sy > 0 ? cy : cy - t;
+    ctx.fillRect(Math.round(armX), Math.round(armY), L, t);
+    const legX = sx > 0 ? cx : cx - t;
+    const legY = sy > 0 ? cy : cy - L;
+    ctx.fillRect(Math.round(legX), Math.round(legY), t, L);
+  }
+}
+
+// Mono running up a vertical rail, the way type sits on a spine. Rotated a
+// quarter turn anticlockwise so it reads bottom-to-top; `x` is the baseline,
+// and glyphs rise from it toward smaller x.
+export function verticalStamp(ctx, text, x, y, size, color = BRAND.white, maxWidth = Infinity) {
+  ctx.save();
+  ctx.translate(Math.round(x), Math.round(y));
+  ctx.rotate(-Math.PI / 2);
+  const used = monoStamp(ctx, text, 0, 0, size, color, 'center', maxWidth);
+  ctx.restore();
+  return used;
+}
+
 export function tickerStrip(ctx, W, stripTop, stripH) {
   ctx.save();
   ctx.fillStyle = BRAND.battleRed;

@@ -43,7 +43,12 @@ function applySurface(next) {
   if (next === 'share' && !wasShare) {
     state.wallpaperDevice = state.device.id;
     state.device = getDevice(SHARE_SQUARE);
-    if (state.template.gameday !== true) state.template = getTemplate('my-seat');
+    // A card should carry the matchup, which the gameday templates do outright
+    // and the frames do through their fallback line. Anything else gets swapped
+    // for My Seat — but a fan who chose a frame keeps it rather than losing it
+    // on the way to the share sheet.
+    const carriesGameday = state.template.gameday === true || state.template.frame === true;
+    if (!carriesGameday) state.template = getTemplate('my-seat');
   } else if (next !== 'share' && wasShare) {
     state.device = getDevice(state.wallpaperDevice || state.device.id);
   }
@@ -85,7 +90,7 @@ function previewSize() {
 }
 
 // One draw path, any surface size. Used by the preview and by the export.
-function paint(target, W, H, withGuides) {
+function paint(target, W, H, withGuides, { overlay = true } = {}) {
   target.fillStyle = '#021118';
   target.fillRect(0, 0, W, H);
 
@@ -105,9 +110,15 @@ function paint(target, W, H, withGuides) {
   }
 
   const sample = makeSampler(state.image, W, H, rect);
-  state.template.draw(target, {
-    W, H, device: state.device, surface: effectiveSurface(), fields: state.fields, marks, sample,
-  });
+  // `overlay: false` paints the photograph alone. The frame templates are
+  // checked by rendering both and differencing the middle, which only means
+  // anything if the photo path is byte-identical either way — so it is the
+  // same function, not a second one that could drift from it.
+  if (overlay) {
+    state.template.draw(target, {
+      W, H, device: state.device, surface: effectiveSurface(), fields: state.fields, marks, sample,
+    });
+  }
   if (withGuides) drawGuides(target, W, H, state.device, effectiveSurface());
 }
 
@@ -118,12 +129,16 @@ function scheduleRender() {
   requestAnimationFrame(() => { renderQueued = false; render(); });
 }
 
-function render() {
+// `render(false)` is the documented way to get a guide-free preview canvas
+// before reading pixels off it. It took no argument, so it silently ignored one
+// and painted whatever state.guides happened to be — a caller following the
+// contract got a canvas full of guide ink and no way to tell.
+function render(withGuides = state.guides) {
   const { w, h, cssW, cssH } = previewSize();
   if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
   canvas.style.width = `${Math.round(cssW)}px`;
   canvas.style.height = `${Math.round(cssH)}px`;
-  paint(ctx, w, h, state.guides);
+  paint(ctx, w, h, withGuides);
 }
 
 // Full-resolution surface, built only when the fan actually downloads.
@@ -228,7 +243,25 @@ function syncSurfaceControls() {
 
 function buildTemplateList() {
   const wrap = $('#templates');
-  for (const t of TEMPLATES) {
+  // Eleven looks is more than a phone can scan as one run. Split them by what
+  // they do to the photograph: frames brand the edges and leave the middle
+  // alone, the rest set type across it.
+  const groups = [
+    ['Frames — the photo stays clear', TEMPLATES.filter(t => t.frame)],
+    ['Type over the photo', TEMPLATES.filter(t => !t.frame)],
+  ];
+  for (const [heading, list] of groups) {
+    if (!list.length) continue;
+    const h = document.createElement('p');
+    h.className = 'tpl-group';
+    h.textContent = heading;
+    wrap.appendChild(h);
+    buildTemplateGroup(wrap, list);
+  }
+}
+
+function buildTemplateGroup(wrap, list) {
+  for (const t of list) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'tpl';
@@ -702,6 +735,7 @@ init();
 // Exposed so harnesses can drive the app without clicking through the UI.
 window.__studio = {
   state, render, paint, useSource, effectiveSurface, previewSize, renderExport,
+  templates: TEMPLATES,
   setDevice: id => { state.device = getDevice(id); $('#device').value = id; setDeviceLabel(); syncSurfaceControls(); scheduleRender(); },
   setTemplate: id => { state.template = getTemplate(id); scheduleRender(); },
   setSurface: s => { state.surface = s; scheduleRender(); },

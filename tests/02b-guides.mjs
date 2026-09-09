@@ -15,8 +15,7 @@ const r = await page.evaluate(async () => {
   const probe = [Math.round(c.width * 0.5), Math.round(c.height * 0.15)]; // inside clock zone
   const clean1 = px(...probe);
 
-  const g = document.querySelector('#guides');
-  g.checked = true; g.dispatchEvent(new Event('change'));
+  document.querySelector('#guides-btn').click();
   await new Promise(res => requestAnimationFrame(() => requestAnimationFrame(res)));
   const previewWithGuides = px(...probe);
 
@@ -28,7 +27,7 @@ const r = await page.evaluate(async () => {
   let bin = ''; for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
 
   // race variant: schedule a guides render then immediately export, like a fast click
-  g.checked = true; g.dispatchEvent(new Event('change')); // queues rAF render(true)
+  document.querySelector('#guides-btn').click(); // queues rAF render(true)
   S.render(false);
   const raceBlob = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.94));
   const rbuf = new Uint8Array(await raceBlob.arrayBuffer());
@@ -38,6 +37,7 @@ const r = await page.evaluate(async () => {
 });
 console.log('probe px', r.probe, 'clean', r.clean1, 'preview w/ guides', r.previewWithGuides, 'after render(false)', r.afterRenderFalse);
 
+const measured = {};
 for (const [name, b64] of [['normal export', r.b64], ['race export', r.raceB64]]) {
   const buf = Buffer.from(b64, 'base64');
   const { data, info } = await sharp(buf).raw().toBuffer({ resolveWithObject: true });
@@ -53,5 +53,19 @@ for (const [name, b64] of [['normal export', r.b64], ['race export', r.raceB64]]
     }
   }
   console.log(name, 'clockPixel', clock, 'redTintedTopFraction', (tinted / n).toFixed(4));
+  measured[name] = tinted / n;
 }
 await browser.close();
+
+// This suite printed its evidence and always exited 0, so a preview canvas full
+// of guide ink read as a pass. Give it a verdict: guide ink is red-tinted, and
+// none of it may survive into anything read back for export.
+const GUIDE_IN_EXPORT = 0.001;
+const verdict = [
+  ['render(false) clears the preview', String(r.afterRenderFalse) === String(r.clean1)],
+  ['normal export carries no guide ink', measured['normal export'] <= GUIDE_IN_EXPORT],
+  ['race export carries no guide ink', measured['race export'] <= GUIDE_IN_EXPORT],
+];
+let bad = 0;
+for (const [name, ok] of verdict) { if (!ok) bad++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}`); }
+process.exit(bad ? 1 : 0);
