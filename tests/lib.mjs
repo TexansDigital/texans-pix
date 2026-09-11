@@ -1,33 +1,20 @@
 // Shared harness helpers. NODE_PATH must point at the playwright install.
 import { chromium } from 'playwright';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 
 export const BASE = 'http://127.0.0.1:8080/';
 
-const FONT_DIR = new URL('./fonts/', import.meta.url).pathname;
-
-// The sandbox cannot reach fonts.googleapis.com over TLS, so the Azeret Mono
-// the app asks for is served from tests/fonts instead. Without this every mono
-// measurement in the suite is taken against a fallback face and the numbers
-// mean nothing. Run tests/fetch-mono.mjs once to populate it.
-export const MONO_LOCAL = existsSync(FONT_DIR + 'azeret.css');
-
-async function routeMono(page) {
-  if (!MONO_LOCAL) return;
-  await page.route('https://fonts.googleapis.com/**', route =>
-    route.fulfill({ status: 200, contentType: 'text/css', body: readFileSync(FONT_DIR + 'azeret.css', 'utf8') }));
-  await page.route('**/tests/fonts/*.woff2', route => {
-    const name = route.request().url().split('/').pop();
-    return route.fulfill({ status: 200, contentType: 'font/woff2', body: readFileSync(FONT_DIR + name) });
-  });
-}
+// Azeret Mono is served by the app itself now (assets/fonts), so the suite no
+// longer has to stand in for fonts.googleapis.com. MONO_LOCAL stays exported
+// and true: callers use it to mean "the real mono face is available", and it
+// is — from the app rather than from a stub.
+export const MONO_LOCAL = true;
 
 export async function launch(opts = {}) {
   const browser = await chromium.launch({
     executablePath: process.env.PW_CHROMIUM || '/opt/pw-browsers/chromium',
   });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
-  await routeMono(page);
   const errors = [];
   page.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`${m.type()}: ${m.text()}`); });
   page.on('pageerror', e => errors.push(`pageerror: ${e.message}`));

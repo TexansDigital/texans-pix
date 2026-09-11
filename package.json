@@ -12,7 +12,10 @@
     "preview": "npm run library && npm run site && npx wrangler dev",
     "check": "node tools/preflight.mjs",
     "watch": "node tools/watch-library.mjs",
-    "archive": "node tools/archive-tonight.mjs"
+    "archive": "node tools/archive-tonight.mjs",
+    "list": "node tools/export-list.mjs",
+    "migrate": "npx wrangler d1 migrations apply texans-wallpaper-studio --remote",
+    "migrate:local": "npx wrangler d1 migrations apply texans-wallpaper-studio --local"
   },
   "devDependencies": {
     "sharp": "^0.35.4"

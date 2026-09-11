@@ -1,10 +1,7 @@
 // Mobile harness helpers. Read-only measurement of the shipped app.
 import { chromium, devices } from 'playwright';
-import { readFileSync, existsSync } from 'node:fs';
 
 export const BASE = 'http://127.0.0.1:8080/';
-const FONT_DIR = new URL('../fonts/', import.meta.url).pathname;
-const MONO_LOCAL = existsSync(FONT_DIR + 'azeret.css');
 
 export const PROFILES = [
   // Playwright viewports are the real usable area (screen minus browser chrome).
@@ -19,20 +16,12 @@ export async function browserUp() {
   return chromium.launch({ executablePath: process.env.PW_CHROMIUM || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
 }
 
-async function routeMono(page) {
-  if (!MONO_LOCAL) return;
-  await page.route('https://fonts.googleapis.com/**', r =>
-    r.fulfill({ status: 200, contentType: 'text/css', body: readFileSync(FONT_DIR + 'azeret.css', 'utf8') }));
-  await page.route('**/tests/fonts/*.woff2', r => {
-    const name = r.request().url().split('/').pop();
-    return r.fulfill({ status: 200, contentType: 'font/woff2', body: readFileSync(FONT_DIR + name) });
-  });
-}
+// Azeret Mono used to be stubbed here because the app fetched it from Google
+// at runtime. The app self-hosts it now, so there is nothing to stand in for.
 
 export async function openOn(browser, profile, extra = {}) {
   const ctx = await browser.newContext({ ...profile.d, hasTouch: true, isMobile: true, ...extra });
   const page = await ctx.newPage();
-  await routeMono(page);
   await page.goto(BASE, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__studio && window.__studio.state, null, { timeout: 20000 });
   await page.evaluate(() => document.fonts.ready);

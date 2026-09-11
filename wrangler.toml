@@ -15,12 +15,30 @@
 
 name = "texans-wallpaper-studio"
 compatibility_date = "2026-01-01"
+# One Worker in front of the files. It handles /api/* and hands every other
+# request straight to the static assets, so the studio itself is unchanged.
+main = "worker/index.js"
 
 [assets]
 directory = "./_site"
+binding = "ASSETS"
 # A missing file must answer 404, not 200. This is one page at /, not an app
 # with client-side routes, so nothing needs a catch-all — and the SPA fallback
 # served index.html under every wrong URL, which meant a broken asset path
 # looked fine and a deleted file looked like it was still there. `/` still
 # resolves to index.html through the default html_handling.
 not_found_handling = "none"
+
+# The fan list. Create it once with:
+#   npx wrangler d1 create texans-wallpaper-studio
+# then paste the database_id it prints over the placeholder below.
+[[d1_databases]]
+binding = "DB"
+database_name = "texans-wallpaper-studio"
+database_id = "PASTE_DATABASE_ID_HERE"
+migrations_dir = "migrations"
+
+[vars]
+# Overridden in production with `npx wrangler secret put THROTTLE_SALT`. It
+# only salts the hash the abuse throttle keys on; no raw IP is ever stored.
+THROTTLE_SALT = "dev-salt"

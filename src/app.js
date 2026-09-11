@@ -1,5 +1,6 @@
 import { DEVICES, DEVICE_GROUPS, getDevice, detectDevice, SHARE_SQUARE } from './devices.js';
 import { TEMPLATES, getTemplate } from './templates.js';
+import { initJoin, offerJoin } from './join.js';
 import {
   loadFonts, decodeImage, coverRect, coverSlack, makeSampler, clamp, drawGuides, ImageError,
 } from './compose.js';
@@ -492,6 +493,7 @@ async function exportWallpaper() {
     try {
       await downloads.save({ filename, data: blob });
       setStatus(`Saved ${w} × ${h}`);
+      offerJoin('after-save');
     } catch (err) {
       if (err?.code === 'declined') setStatus('Save cancelled.');
       else setStatus('This view cannot save files.', true);
@@ -503,6 +505,9 @@ async function exportWallpaper() {
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 4000);
     setStatus(`Downloaded ${w} × ${h} — ${(blob.size / 1024).toFixed(0)} KB`);
+    // Only once the file is actually on its way. A fan who never saves is
+    // never asked for anything.
+    offerJoin('after-save');
   }
 }
 
@@ -667,6 +672,7 @@ async function init() {
   wireTabs();
   wireGestures();
   wireFileInput();
+  initJoin();
   syncSurfaceControls();
   setDeviceLabel();
 

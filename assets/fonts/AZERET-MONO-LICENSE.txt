@@ -1,0 +1,10 @@
+Azeret Mono is licensed under the SIL Open Font License, Version 1.1, which
+permits self-hosting and redistribution with the license retained.
+
+  Copyright 2020 The Azeret Project Authors
+  https://github.com/displaay/Azeret
+
+  https://openfontlicense.org/open-font-license-official-text/
+
+The file azeret-mono.woff2 is the latin subset served by Google Fonts, taken
+once and committed so the studio does not call a third party at runtime.

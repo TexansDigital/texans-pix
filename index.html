@@ -2,9 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/assets/logos/apple-touch-icon.png">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Texans Wallpaper Studio</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="assets/brand/tokens.css">
 <link rel="stylesheet" href="src/studio.css">
 </head>
@@ -119,6 +120,34 @@
       <button id="export" class="btn primary wide" type="button">Download wallpaper</button>
     </div>
     <p class="hint tiny">Free. No sign-in, no email.</p>
+
+    <!-- Shown only after a wallpaper is actually saved. Never a gate: the line
+         above stays true, because the download never asks for any of this. -->
+    <section id="join" class="join" hidden aria-labelledby="join-head">
+      <div class="join-head">
+        <h2 id="join-head">Want next week's first?</h2>
+        <button id="join-dismiss" type="button" class="join-x" aria-label="No thanks">&times;</button>
+      </div>
+      <p class="hint tiny">New photos land every Tuesday. Your wallpaper is already saved — this is extra.</p>
+      <form id="join-form" novalidate>
+        <label class="field">
+          <span>Email</span>
+          <input id="join-email" type="email" inputmode="email" autocomplete="email"
+                 placeholder="you@example.com" required>
+        </label>
+        <label class="field">
+          <span>Stadium code <em>optional</em></span>
+          <input id="join-code" type="text" inputmode="text" autocomplete="off"
+                 placeholder="Shown on the videoboard">
+        </label>
+        <label class="join-consent">
+          <input id="join-consent" type="checkbox">
+          <span>Email me when new Texans photos and frames drop. I can unsubscribe any time.</span>
+        </label>
+        <button id="join-submit" type="submit" class="btn primary wide">Join the list</button>
+        <p id="join-note" class="hint tiny" role="status" aria-live="polite"></p>
+      </form>
+    </section>
   </div>
 
 </div>

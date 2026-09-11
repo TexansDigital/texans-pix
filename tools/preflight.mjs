@@ -58,6 +58,26 @@ try {
   ok('git check skipped (offline or no remote)');
 }
 
+// 5. The fan list. A Worker with a D1 binding pointed at a placeholder id
+// fails during deploy with a message about a database uuid, which tells you
+// nothing about what to do. Say the actual next command instead.
+const wranglerPath = join(ROOT, 'wrangler.toml');
+if (existsSync(wranglerPath)) {
+  const toml = readFileSync(wranglerPath, 'utf8');
+  if (toml.includes('[[d1_databases]]')) {
+    if (toml.includes('PASTE_DATABASE_ID_HERE')) {
+      bad('The fan list has no database yet.');
+      console.error('\n        npx wrangler d1 create texans-wallpaper-studio');
+      console.error('        # paste the database_id it prints into wrangler.toml, then');
+      console.error('        npm run migrate\n');
+    } else if (/database_id\s*=\s*"[0-9a-f-]{36}"/.test(toml)) {
+      ok('fan list database configured');
+    } else {
+      bad('database_id in wrangler.toml does not look like a Cloudflare id.');
+    }
+  }
+}
+
 console.log('');
 if (failures) {
   console.error(`Preflight failed with ${failures} problem${failures === 1 ? '' : 's'}. Nothing was deployed.\n`);

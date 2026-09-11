@@ -24,7 +24,9 @@ Azeret Mono at 12px / 0.18em for stamps. Square corners; pill radius is for
 tags only. Scrims over photography, never capsules.
 
 Canvas falls back to Arial silently if a face has not loaded — always await
-`loadFonts()` before drawing.
+`loadFonts()` before drawing. All five faces are self-hosted in `assets/fonts`;
+Azeret Mono is a variable font declared `font-weight: 100 900`, so nothing is
+fetched from a third party at runtime and a stamp drawn at 500 is really 500.
 
 ## Testing
 
@@ -38,3 +40,23 @@ eyeballing screenshots.
 without clicking through the UI.
 
 Chromium: `/opt/pw-browsers/chromium`. Serve with `npm start` (port 8080).
+
+## The fan list
+
+One server-side surface: `POST /api/join` in `worker/index.js`, writing to D1.
+Everything else is still static assets served by the same Worker.
+
+- **The download is never gated.** The opt-in is offered after a wallpaper is
+  actually saved, and declining costs the fan nothing. The page says "Free. No
+  sign-in, no email" and that has to stay true.
+- **Consent is a ticked box and the wording travels with it.** `CONSENT_TEXT`
+  in `src/join.js` is sent with every signup and stored on the row, so a fan's
+  consent is legible later even after the wording changes.
+- **Request bodies are capped at 2KB** in the Worker. That is the enforcement
+  of the photo rule above: there is no code path that accepts an image, and the
+  cap means one cannot arrive by accident. `tests/15-join.mjs` audits every
+  request a full session makes and fails on any image bytes, data: URI, long
+  base64 run, or off-origin call.
+- **No raw IP is stored.** The abuse throttle keys on a salted SHA-256.
+
+`npm run list` exports the list as CSV. `npm run migrate` applies migrations.

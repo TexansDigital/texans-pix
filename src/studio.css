@@ -7,6 +7,25 @@
    were used with the wallpaper entirely off screen. Nothing scrolls except the
    sheet. */
 
+/* Azeret Mono carries every stamp and the ticker. It used to come from
+   fonts.googleapis.com at runtime: a third-party request on every load of a
+   Texans page, and on a bad stadium connection the stamps fell back to Arial
+   silently — the page looked fine and the brand was wrong. Self-hosted (SIL
+   OFL, see AZERET-MONO-LICENSE.txt) so it cannot fail that way.
+
+   One file, because it is a variable font with a 100-900 weight axis. It was
+   declared at a single fixed weight against a face whose default instance is
+   Thin; a range lets the browser actually set the axis, so a 500 stamp is
+   drawn at 500. font-display:block rather than swap — a stamp that arrives
+   late in the wrong face is worse than one that arrives a moment later. */
+@font-face {
+  font-family: "Azeret Mono";
+  src: url(../assets/fonts/azeret-mono.woff2) format("woff2-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: block;
+}
+
 @font-face { font-family:"HelveticaNeueLT Ex"; src:url(../assets/fonts/HelveticaNeueLTStd-MdEx.otf) format("opentype"); font-weight:500; font-display:swap }
 @font-face { font-family:"HelveticaNeueLT Ex"; src:url(../assets/fonts/HelveticaNeueLTStd-BdEx.otf) format("opentype"); font-weight:700; font-display:swap }
 @font-face { font-family:"HelveticaNeueLT Ex"; src:url(../assets/fonts/HelveticaNeueLTPro-HvEx.otf) format("opentype"); font-weight:800; font-display:swap }
@@ -448,3 +467,53 @@ input[type="text"]::placeholder { color: var(--text-muted) }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .thumb { position: relative }
+
+/* --- the list ------------------------------------------------------------
+   Shown only after a save. Sits inside the action band so it reads as a
+   follow-on to the download rather than a thing standing between the fan and
+   their wallpaper. */
+.join {
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  background: var(--steel-900);
+  border-left: 3px solid var(--battle-red);
+}
+.join-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3) }
+.join-head h2 {
+  margin: 0;
+  font-family: var(--font-display); font-weight: 900; text-transform: uppercase;
+  font-size: 17px; letter-spacing: -.01em; color: var(--text-strong, #fff);
+}
+.join-x {
+  flex: none; width: 44px; height: 44px; margin: -10px -10px -10px 0;
+  background: none; border: 0; cursor: pointer;
+  color: var(--text-muted); font-size: 22px; line-height: 1;
+}
+.join-x:hover { color: var(--text-body) }
+.join form { display: flex; flex-direction: column; gap: var(--space-3); margin-top: var(--space-3) }
+.join .field { display: flex; flex-direction: column; gap: 4px }
+.join .field > span {
+  font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+  letter-spacing: .18em; text-transform: uppercase; color: var(--text-muted);
+}
+.join .field > span em { font-style: normal; opacity: .6 }
+.join input[type="email"], .join input[type="text"] {
+  /* 16px exactly: anything smaller and iOS Safari zooms the page on focus and
+     will not zoom back out. */
+  font-size: 16px; min-height: 44px;
+  padding: 10px var(--space-3);
+  background: var(--steel-950, #021118); color: inherit;
+  border: 1px solid var(--line-hairline);
+}
+.join input:focus-visible { outline: 2px solid var(--battle-red); outline-offset: 1px }
+.join-consent {
+  display: flex; align-items: flex-start; gap: var(--space-3);
+  font-size: 13px; line-height: 1.45; color: var(--text-body);
+  cursor: pointer;
+}
+.join-consent input {
+  flex: none; width: 22px; height: 22px; margin: 1px 0 0;
+  accent-color: var(--battle-red);
+}
+#join-note:empty { display: none }
+#join-note.err { color: var(--battle-red) }

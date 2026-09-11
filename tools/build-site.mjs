@@ -11,7 +11,12 @@ const SITE = join(ROOT, '_site');
 await rm(SITE, { recursive: true, force: true });
 await mkdir(SITE, { recursive: true });
 
-await cp(join(ROOT, 'index.html'), join(SITE, 'index.html'));
+// Root-level files, named one by one: the site build copies directories and
+// would otherwise leave anything sitting loose at the repo root behind. A
+// favicon that never ships is a generic tab icon on a Texans page.
+for (const file of ['index.html', 'favicon.ico']) {
+  await cp(join(ROOT, file), join(SITE, file));
+}
 // This week's game. The studio reads it at runtime, so it ships with the site.
 await cp(join(ROOT, 'gameday.json'), join(SITE, 'gameday.json'));
 // Skip dotfiles. macOS scatters .DS_Store through these directories and they
