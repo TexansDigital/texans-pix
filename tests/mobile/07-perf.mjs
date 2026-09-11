@@ -43,6 +43,10 @@ for (const [netName, net] of Object.entries(NETS)) {
 
     // Tapping a library thumb pulls the full-size photo, not the thumbnail.
     let photoMs = -1, photoBytes = 0;
+    // The library sits behind the first-run screen until the fan picks a way
+    // in, so a cold click on a thumb never lands.
+    await page.evaluate(() => document.querySelector('#start-lib')?.click());
+    await page.waitForSelector('.thumb', { state: 'visible', timeout: 10000 }).catch(() => {});
     if (await page.$('.thumb')) {
       const s = Date.now();
       await page.click('.thumb');

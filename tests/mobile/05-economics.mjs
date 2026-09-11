@@ -8,10 +8,11 @@ for (const p of PROFILES) {
   const base = await page.evaluate(() => {
     const r = s => { const e = document.querySelector(s); return e ? e.getBoundingClientRect() : null; };
     const vh = innerHeight;
-    const mast = r('.mast'), stage = r('#stage'), hold = r('.canvas-hold'), status = r('#status');
-    const panels = [...document.querySelectorAll('.panel')].map(e => {
+    const mast = r('header.bar'), stage = r('#stage'), hold = r('section.preview'), status = r('#status');
+    const panels = [...document.querySelectorAll('.pane')].map(e => {
       const b = e.getBoundingClientRect();
-      return { legend: e.querySelector('legend').textContent.trim(), top: b.top + scrollY, h: b.height };
+      // Panes carry their name as data-pane; the <legend> they used to have is gone.
+      return { legend: e.dataset.pane || '(unnamed)', top: b.top + scrollY, h: b.height };
     });
     return {
       vh, docH: document.documentElement.scrollHeight,

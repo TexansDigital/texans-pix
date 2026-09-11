@@ -14,7 +14,9 @@ await page.evaluate(async () => {
 await page.waitForTimeout(200);
 
 async function drag(dx, dy, zoom) {
-  await page.evaluate(z => { const s = __studio.state; s.zoom = z; s.panX = 0; s.panY = 0; document.querySelector('#zoom').value = String(z); __studio.render(false); scrollTo(0,0); }, zoom);
+  // Zoom is pinch on the canvas now; there is no slider to set. Driving the
+  // state directly is what the slider did anyway.
+  await page.evaluate(z => { const s = __studio.state; s.zoom = z; s.panX = 0; s.panY = 0; __studio.render(false); scrollTo(0, 0); }, zoom);
   await page.waitForTimeout(100);
   const b = await page.evaluate(() => { const r = document.querySelector('#stage').getBoundingClientRect(); return { x: r.x + r.width/2, y: r.y + r.height/2 }; });
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: b.x, y: b.y, id: 1 }] });

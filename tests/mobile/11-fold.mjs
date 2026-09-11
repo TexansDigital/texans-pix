@@ -6,7 +6,9 @@ for (const p of PROFILES) {
     const { ctx, page } = await openOn(browser, { ...p, d:{...p.d, viewport: vp} });
     const m = await page.evaluate(() => {
       const g = s => document.querySelector(s).getBoundingClientRect();
-      const mast = g('.mast'), hold = g('.canvas-hold'), st = g('#stage'), note = g('.mast-note');
+      // .mast/.canvas-hold/.mast-note are pre-redesign names. The status line under
+      // the bar is what .mast-note used to be: the thing that must not wrap.
+      const mast = g('header.bar'), hold = g('section.preview'), st = g('#stage'), note = g('#status');
       return {
         vw: innerWidth, vh: innerHeight,
         mastH: mast.height, noteTop: note.top, noteWrapped: note.top > mast.top + 40,

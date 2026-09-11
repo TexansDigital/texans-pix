@@ -27,6 +27,14 @@ console.log('worst mean render:', worst.toFixed(2), 'ms  (16.7ms is one frame at
 console.log(worst > 16.7 ? '  <-- a drag or a keystroke cannot hold 60fps on this combination' : '  every combination renders inside one frame');
 
 console.log('\n=== Typing stress: 24 keystrokes into the headline, measured end to end ===');
+// The headline input lives in the Words tab, behind the first-run screen.
+// Clicking it cold times out on an element that is in the DOM but not on the
+// screen — enter the studio and open the tab first, the way a fan does.
+await page.evaluate(() => {
+  document.querySelector('#start-lib')?.click();
+  window.__studio.setTab('words');
+});
+await page.waitForSelector('[data-field="headline"]', { state: 'visible', timeout: 10000 });
 await page.click('[data-field="headline"]');
 const t0 = Date.now();
 await page.type('[data-field="headline"]', 'ABCDEFGHIJKLMNOPQRSTUVWX', { delay: 0 });

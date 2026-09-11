@@ -3,6 +3,25 @@ import { chromium, devices } from 'playwright';
 
 export const BASE = 'http://127.0.0.1:8080/';
 
+// The page's landmarks, named once. The mobile pass renamed all of these —
+// .mast became the bar, .canvas-hold became the preview section, .panel/legend
+// became panes carrying a data-pane name, and the zoom slider was replaced by
+// pinch on the canvas. Four suites went on querying the old names, got null,
+// and died with "cannot read properties of null", which reads like a broken
+// harness rather than what it was. Anything that renames these again breaks
+// here, once, instead of in every suite separately.
+export const L = {
+  bar: 'header.bar',        // was .mast
+  preview: 'section.preview', // was .canvas-hold
+  stage: '#stage',
+  sheet: '.sheet',          // was .studio
+  pane: '.pane',            // was .panel
+  status: '#status',
+};
+
+// Panes have no <legend> any more; their name is the data-pane attribute.
+export const paneName = 'el => el.dataset.pane || el.getAttribute("aria-label") || "(unnamed)"';
+
 export const PROFILES = [
   // Playwright viewports are the real usable area (screen minus browser chrome).
   { name: 'iPhone SE 3rd',      screen: [375, 667], d: devices['iPhone SE (3rd gen)'] },

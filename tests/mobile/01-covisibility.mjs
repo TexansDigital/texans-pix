@@ -8,7 +8,9 @@ const GROUPS = [
   ['template (picker)',           '#templates'],
   ['fields (headline input)',     '[data-field="headline"]'],
   ['fields (kicker input)',       '[data-field="kicker"]'],
-  ['frame (zoom slider)',         '#zoom'],
+  // Framing is the canvas itself now — drag to pan, pinch to zoom. The slider
+  // this used to name was removed in the mobile pass.
+  ['frame (drag the canvas)',     '#stage'],
   ['frame (download button)',     '#export'],
   ['collection (save button)',    '#keep'],
 ];
@@ -16,6 +18,11 @@ const GROUPS = [
 const measure = (page, sel) => page.evaluate(sel => {
   const el = document.querySelector(sel);
   const c = document.querySelector('#stage');
+  // A renamed control used to crash this with "cannot read properties of
+  // null", which reads as a broken harness rather than as the real finding:
+  // the thing being measured is not on the page any more. Say that instead.
+  if (!el) return { missing: sel };
+  if (!c) return { missing: '#stage' };
   const cr = c.getBoundingClientRect();
   const vh = window.innerHeight, vw = window.innerWidth;
   const iy = Math.max(0, Math.min(cr.bottom, vh) - Math.max(cr.top, 0));

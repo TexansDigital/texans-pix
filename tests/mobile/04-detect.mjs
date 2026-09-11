@@ -35,9 +35,9 @@ const css = await page.evaluate(() => {
   probe.style.cssText = 'position:fixed;top:0;height:env(safe-area-inset-top,0px);width:env(safe-area-inset-left,0px)';
   document.body.appendChild(probe);
   const pr = probe.getBoundingClientRect();
-  const mast = document.querySelector('.mast').getBoundingClientRect();
-  const lastPanel = [...document.querySelectorAll('.panel')].pop().getBoundingClientRect();
-  const studio = getComputedStyle(document.querySelector('.studio'));
+  const mast = document.querySelector('header.bar').getBoundingClientRect();
+  const lastPanel = [...document.querySelectorAll('.pane')].pop().getBoundingClientRect();
+  const studio = getComputedStyle(document.querySelector('.sheet'));
   return {
     meta,
     stageMaxH: getComputedStyle(el).maxHeight,
